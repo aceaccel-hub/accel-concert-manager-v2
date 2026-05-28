@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Users, List, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Edit2, Users, List, CalendarDays, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent, type DragStartEvent, DragOverlay,
+} from '@dnd-kit/core';
+import {
+  arrayMove, SortableContext, verticalListSortingStrategy, useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import toast from 'react-hot-toast';
 import { db } from '../../../db/database';
 import type { Rehearsal, ConcertMember, Member, RehearsalAttendance } from '../../../types';
@@ -14,13 +22,32 @@ export default function RehearsalsTab({ concertId }: Props) {
   const [editItem, setEditItem] = useState<Rehearsal | null>(null);
   const [attendanceTarget, setAttendanceTarget] = useState<Rehearsal | null>(null);
   const [detailTarget, setDetailTarget] = useState<Rehearsal | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const load = async () => {
-    const data = await db.rehearsals.where('concertId').equals(concertId).sortBy('date');
-    setRehearsals(data);
+    const raw = await db.rehearsals.where('concertId').equals(concertId).toArray();
+    const sorted = raw
+      .map((r, idx) => ({ ...r, order: r.order ?? idx + 1 }))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    setRehearsals(sorted);
   };
 
   useEffect(() => { load(); }, [concertId]);
+
+  const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as string);
+  const handleDragEnd = async (e: DragEndEvent) => {
+    const { active, over } = e;
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+    const oldIdx = rehearsals.findIndex(r => r.id === active.id);
+    const newIdx = rehearsals.findIndex(r => r.id === over.id);
+    const reordered = arrayMove(rehearsals, oldIdx, newIdx).map((r, idx) => ({ ...r, order: idx + 1 }));
+    setRehearsals(reordered);
+    await Promise.all(reordered.map(r => db.rehearsals.put(r)));
+    toast.success('연습 일정 순서가 변경되었습니다.');
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('이 연습 일정을 삭제하시겠습니까?')) return;
@@ -33,6 +60,7 @@ export default function RehearsalsTab({ concertId }: Props) {
   const today = new Date().toISOString().split('T')[0];
   const upcoming = rehearsals.filter(r => r.date >= today);
   const past = rehearsals.filter(r => r.date < today);
+  const activeReh = rehearsals.find(r => r.id === activeId);
 
   return (
     <div className="p-6 space-y-4">
@@ -40,7 +68,7 @@ export default function RehearsalsTab({ concertId }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-gray-900">연습 일정</h2>
-          <p className="text-xs text-gray-500 mt-0.5">예정 {upcoming.length}회 · 완료 {past.length}회</p>
+          <p className="text-xs text-gray-500 mt-0.5">예정 {upcoming.length}회 · 완료 {past.length}회 · 핸들(⠿)을 드래그해 순서 변경</p>
         </div>
         <div className="flex items-center gap-2">
           {/* 뷰 토글 */}
@@ -66,13 +94,28 @@ export default function RehearsalsTab({ concertId }: Props) {
 
       {/* 뷰 렌더 */}
       {view === 'list' ? (
-        <ListView
-          rehearsals={rehearsals}
-          today={today}
-          onEdit={setEditItem}
-          onDelete={handleDelete}
-          onAttendance={setAttendanceTarget}
-        />
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <ListView
+            rehearsals={rehearsals}
+            today={today}
+            activeId={activeId}
+            onEdit={setEditItem}
+            onDelete={handleDelete}
+            onAttendance={setAttendanceTarget}
+          />
+          <DragOverlay>
+            {activeReh && (
+              <div className="card p-4 shadow-2xl opacity-95 bg-indigo-50 border border-indigo-200">
+                <div className="flex items-center gap-2">
+                  <GripVertical size={16} className="text-indigo-400" />
+                  <span className="badge bg-indigo-100 text-indigo-700">{activeReh.type}</span>
+                  <span className="text-sm font-semibold text-gray-900">{activeReh.date} {activeReh.time}</span>
+                  <span className="text-sm text-gray-500">📍 {activeReh.place}</span>
+                </div>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
       ) : (
         <CalendarView
           rehearsals={rehearsals}
@@ -108,9 +151,10 @@ export default function RehearsalsTab({ concertId }: Props) {
 }
 
 /* ─────── 리스트 뷰 ─────── */
-function ListView({ rehearsals, today, onEdit, onDelete, onAttendance }: {
+function ListView({ rehearsals, today, activeId, onEdit, onDelete, onAttendance }: {
   rehearsals: Rehearsal[];
   today: string;
+  activeId: string | null;
   onEdit: (r: Rehearsal) => void;
   onDelete: (id: string) => void;
   onAttendance: (r: Rehearsal) => void;
@@ -123,40 +167,54 @@ function ListView({ rehearsals, today, onEdit, onDelete, onAttendance }: {
   }
 
   return (
-    <div className="space-y-4">
-      {upcoming.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-2">📅 예정된 연습</p>
-          <div className="space-y-2">
-            {upcoming.map(r => (
-              <RehearsalCard key={r.id} r={r} onEdit={onEdit} onDelete={onDelete} onAttendance={onAttendance} />
-            ))}
+    <SortableContext items={rehearsals.map(r => r.id)} strategy={verticalListSortingStrategy}>
+      <div className="space-y-4">
+        {upcoming.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">📅 예정된 연습</p>
+            <div className="space-y-2">
+              {upcoming.map(r => (
+                <SortableRehearsalCard key={r.id} r={r} isDragging={activeId === r.id} onEdit={onEdit} onDelete={onDelete} onAttendance={onAttendance} />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-      {past.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-2">✅ 완료된 연습</p>
-          <div className="space-y-2 opacity-70">
-            {past.map(r => (
-              <RehearsalCard key={r.id} r={r} onEdit={onEdit} onDelete={onDelete} onAttendance={onAttendance} />
-            ))}
+        )}
+        {past.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">✅ 완료된 연습</p>
+            <div className="space-y-2 opacity-70">
+              {past.map(r => (
+                <SortableRehearsalCard key={r.id} r={r} isDragging={activeId === r.id} onEdit={onEdit} onDelete={onDelete} onAttendance={onAttendance} />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </SortableContext>
   );
 }
 
-function RehearsalCard({ r, onEdit, onDelete, onAttendance }: {
-  r: Rehearsal;
+/* ── Sortable Rehearsal Card ── */
+function SortableRehearsalCard({ r, isDragging, onEdit, onDelete, onAttendance }: {
+  r: Rehearsal; isDragging: boolean;
   onEdit: (r: Rehearsal) => void;
   onDelete: (id: string) => void;
   onAttendance: (r: Rehearsal) => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: r.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 };
+
   return (
-    <div className="card p-4">
+    <div ref={setNodeRef} style={style} className={`card p-4 ${isDragging ? 'bg-indigo-50 border-indigo-200' : ''}`}>
       <div className="flex items-start justify-between">
+        {/* 드래그 핸들 */}
+        <div
+          {...attributes} {...listeners}
+          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mt-1 mr-2 shrink-0"
+          title="드래그해서 순서 변경"
+        >
+          <GripVertical size={16} />
+        </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="badge bg-indigo-50 text-indigo-700">{r.type}</span>

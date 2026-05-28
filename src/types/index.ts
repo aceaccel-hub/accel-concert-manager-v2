@@ -88,6 +88,7 @@ export interface ConcertMember {
   concertGrade?: 'A' | 'B' | 'C';
   isReserve: boolean;
   note?: string;
+  order?: number;
 }
 
 export interface Group {
@@ -127,6 +128,7 @@ export interface Rehearsal {
   conductorEvaluation?: '상' | '중' | '하';
   nextTask?: string;
   createdAt: string;
+  order?: number;
 }
 
 export interface RehearsalAttendance {
@@ -149,6 +151,7 @@ export interface Budget {
   payeeId?: string;
   memo?: string;
   createdAt: string;
+  order?: number;
 }
 
 export interface Document {
