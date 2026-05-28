@@ -4,8 +4,6 @@ import toast from 'react-hot-toast';
 import { db } from '../../../db/database';
 import type { Concert } from '../../../types';
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
   TextRun, HeadingLevel, AlignmentType, WidthType, BorderStyle,
@@ -199,99 +197,105 @@ async function exportExcel(concert: Concert, type: string) {
 }
 
 /* ────────────────────────────────────────
-   PDF 내보내기 (html2canvas 방식 — 한글 완벽 지원)
+   HTML 특수문자 이스케이프
+──────────────────────────────────────── */
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ────────────────────────────────────────
+   PDF 내보내기 — 인쇄 창 방식 (한글 완벽 지원, 오류 없음)
 ──────────────────────────────────────── */
 async function exportPDF(concert: Concert, type: string, previewText: string) {
   const now = new Date();
   const docNum = `ACM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   const dateStr = now.toLocaleDateString('ko-KR');
 
-  // 미리보기 텍스트에서 헤더 3줄 제거하고 본문만 추출
+  // 미리보기 텍스트에서 헤더 제거 후 본문만 추출
   const bodyLines = previewText.split('\n').slice(4).join('\n');
 
-  // 화면 밖에 렌더링할 HTML 요소 생성
-  const wrap = document.createElement('div');
-  Object.assign(wrap.style, {
-    position: 'fixed',
-    top: '0',
-    left: '-9999px',
-    width: '794px',
-    background: '#ffffff',
-    fontFamily: "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'AppleGothic', sans-serif",
-    fontSize: '13px',
-    lineHeight: '1.75',
-    color: '#1a1a1a',
-    boxSizing: 'border-box',
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>아첼_${esc(concert.title)}_${esc(type)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{
+      font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic','AppleGothic',sans-serif;
+      font-size:13px;line-height:1.75;color:#1a1a1a;background:#fff;
+    }
+    .hd{background:#3f3fcb;color:#fff;padding:16px 28px 14px;}
+    .hd h1{font-size:18px;font-weight:700;letter-spacing:.3px;}
+    .hd p{font-size:10px;margin-top:4px;opacity:.85;}
+    .bd{padding:22px 28px 8px;}
+    .ct{font-size:16px;font-weight:700;color:#111;}
+    .ci{font-size:11px;color:#888;margin-top:5px;}
+    hr{border:none;border-top:1.5px solid #e5e5e5;margin:14px 0 16px;}
+    .dt{font-size:13px;font-weight:700;color:#3f3fcb;margin-bottom:14px;}
+    pre{
+      font-family:inherit;font-size:12.5px;
+      white-space:pre-wrap;word-break:break-all;
+      line-height:1.8;padding-bottom:28px;color:#222;
+    }
+    .ft{background:#f8f8ff;border-top:1px solid #dde;padding:8px 28px;font-size:9.5px;color:#888;}
+    @media print{
+      @page{size:A4;margin:0;}
+      body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .no-print{display:none;}
+    }
+    .btn{
+      display:block;margin:20px auto 0;padding:10px 28px;
+      background:#3f3fcb;color:#fff;border:none;border-radius:8px;
+      font-size:13px;font-family:inherit;cursor:pointer;
+    }
+    .hint{text-align:center;font-size:11px;color:#888;margin-top:8px;}
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <h1>아첼 오케스트라</h1>
+    <p>문서번호: ${docNum} &nbsp;|&nbsp; 발행일: ${dateStr}</p>
+  </div>
+  <div class="bd">
+    <div class="ct">${esc(concert.title)}</div>
+    <div class="ci">${esc(concert.date)} ${esc(concert.time)} &nbsp;|&nbsp; ${esc(concert.place)}${concert.conductor ? ` &nbsp;|&nbsp; 지휘: ${esc(concert.conductor)}` : ''}</div>
+    <hr>
+    <div class="dt">■ ${esc(type)}</div>
+    <pre>${esc(bodyLines)}</pre>
+  </div>
+  <div class="ft">아첼 오케스트라 공식 문서 &nbsp;·&nbsp; ${docNum} &nbsp;·&nbsp; 발행일 ${dateStr}</div>
+  <div class="no-print">
+    <button class="btn" onclick="window.print()">🖨️ PDF로 저장 / 인쇄</button>
+    <p class="hint">인쇄 대화창 → 대상 프린터를 "PDF로 저장" 선택</p>
+  </div>
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 400);
+    };
+  </script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank', 'width=860,height=900');
+
+  if (!win) {
+    // 팝업 차단된 경우 다운로드로 대체
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `아첼_${concert.title}_${type}.html`;
+    a.click();
+    toast('팝업이 차단되었습니다. HTML 파일을 열고 인쇄해 주세요.', { icon: 'ℹ️', duration: 5000 });
+    return;
+  }
+
+  win.addEventListener('afterprint', () => {
+    URL.revokeObjectURL(url);
   });
 
-  wrap.innerHTML = `
-    <div style="background:#3f3fcb;color:#ffffff;padding:16px 28px 14px;">
-      <div style="font-size:18px;font-weight:700;letter-spacing:0.3px;">아첼 오케스트라</div>
-      <div style="font-size:10px;margin-top:3px;opacity:0.85;">
-        문서번호: ${docNum} &nbsp;&nbsp;|&nbsp;&nbsp; 발행일: ${dateStr}
-      </div>
-    </div>
-    <div style="padding:22px 28px 8px;">
-      <div style="font-size:16px;font-weight:700;color:#111;">${concert.title}</div>
-      <div style="font-size:11px;color:#888;margin-top:5px;">
-        ${concert.date} ${concert.time} &nbsp;|&nbsp; ${concert.place}
-        ${concert.conductor ? ` &nbsp;|&nbsp; 지휘: ${concert.conductor}` : ''}
-      </div>
-      <hr style="border:none;border-top:1.5px solid #e5e5e5;margin:14px 0 16px;">
-      <div style="font-size:13px;font-weight:700;color:#3f3fcb;margin-bottom:14px;">■ ${type}</div>
-      <pre style="
-        font-family: 'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic','AppleGothic',sans-serif;
-        font-size: 12.5px;
-        white-space: pre-wrap;
-        word-break: break-all;
-        color: #222;
-        margin: 0;
-        padding-bottom: 28px;
-        line-height: 1.8;
-      ">${bodyLines}</pre>
-    </div>
-    <div style="background:#f8f8ff;border-top:1px solid #dde;padding:8px 28px;font-size:9.5px;color:#888;">
-      아첼 오케스트라 공식 문서 &nbsp;·&nbsp; ${docNum} &nbsp;·&nbsp; 발행일 ${dateStr}
-    </div>
-  `;
-
-  document.body.appendChild(wrap);
-
-  try {
-    const canvas = await html2canvas(wrap, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-    });
-    document.body.removeChild(wrap);
-
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    const pageW = 210;
-    const pageH = 297;
-    // 이미지 너비를 A4 너비에 맞춤
-    const imgW = pageW;
-    const imgH = (canvas.height * imgW) / canvas.width;
-
-    let printed = 0;
-    let page = 0;
-    while (printed < imgH) {
-      if (page > 0) pdf.addPage();
-      // 현재 페이지에서 잘릴 y 위치만큼 이미지를 올림
-      pdf.addImage(imgData, 'PNG', 0, -printed, imgW, imgH);
-      printed += pageH;
-      page++;
-    }
-
-    pdf.save(`아첼_${concert.title}_${type}.pdf`);
-    toast.success('PDF 파일이 저장되었습니다.');
-  } catch (err) {
-    if (document.body.contains(wrap)) document.body.removeChild(wrap);
-    toast.error('PDF 생성 중 오류가 발생했습니다.');
-    throw err;
-  }
+  toast.success('인쇄 창이 열렸습니다. "PDF로 저장"을 선택하세요.');
 }
 
 /* ────────────────────────────────────────
