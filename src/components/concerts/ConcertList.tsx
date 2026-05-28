@@ -169,11 +169,6 @@ export default function ConcertList() {
               <p className="text-xs text-gray-500 mt-2">{selected.progressRate}% 완료</p>
             </div>
 
-            <div className="text-center pt-4">
-              <button onClick={() => setView('detail')} className="btn-primary px-8 py-3 text-base">
-                이 연주회 통합 관리하기 →
-              </button>
-            </div>
           </div>
         ) : (
           <div className="h-full flex items-center justify-center text-gray-400">
