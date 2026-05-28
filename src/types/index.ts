@@ -85,6 +85,7 @@ export interface ConcertMember {
   fee?: number;
   attendanceRate?: number;
   evaluation?: '상' | '중' | '하';
+  concertGrade?: 'A' | 'B' | 'C';
   isReserve: boolean;
   note?: string;
 }

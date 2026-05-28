@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Users } from 'lucide-react';
+import { Plus, Trash2, Edit2, Users, List, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { db } from '../../../db/database';
 import type { Rehearsal, ConcertMember, Member, RehearsalAttendance } from '../../../types';
 import Modal from '../../common/Modal';
@@ -8,9 +9,11 @@ interface Props { concertId: string; }
 
 export default function RehearsalsTab({ concertId }: Props) {
   const [rehearsals, setRehearsals] = useState<Rehearsal[]>([]);
+  const [view, setView] = useState<'list' | 'calendar'>('list');
   const [showAdd, setShowAdd] = useState(false);
   const [editItem, setEditItem] = useState<Rehearsal | null>(null);
   const [attendanceTarget, setAttendanceTarget] = useState<Rehearsal | null>(null);
+  const [detailTarget, setDetailTarget] = useState<Rehearsal | null>(null);
 
   const load = async () => {
     const data = await db.rehearsals.where('concertId').equals(concertId).sortBy('date');
@@ -24,6 +27,7 @@ export default function RehearsalsTab({ concertId }: Props) {
     await db.rehearsals.delete(id);
     await db.rehearsalAttendance.where('rehearsalId').equals(id).delete();
     load();
+    toast.success('연습 일정이 삭제되었습니다.');
   };
 
   const today = new Date().toISOString().split('T')[0];
@@ -32,39 +36,51 @@ export default function RehearsalsTab({ concertId }: Props) {
 
   return (
     <div className="p-6 space-y-4">
+      {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-gray-900">연습 일정</h2>
           <p className="text-xs text-gray-500 mt-0.5">예정 {upcoming.length}회 · 완료 {past.length}회</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowAdd(true)}>
-          <Plus size={16} /> 연습 추가
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 뷰 토글 */}
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setView('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <List size={13} /> 리스트
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${view === 'calendar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <CalendarDays size={13} /> 달력
+            </button>
+          </div>
+          <button className="btn-primary" onClick={() => setShowAdd(true)}>
+            <Plus size={16} /> 연습 추가
+          </button>
+        </div>
       </div>
 
-      {rehearsals.length === 0 ? (
-        <div className="card p-12 text-center text-gray-400">등록된 연습 일정이 없습니다.</div>
+      {/* 뷰 렌더 */}
+      {view === 'list' ? (
+        <ListView
+          rehearsals={rehearsals}
+          today={today}
+          onEdit={setEditItem}
+          onDelete={handleDelete}
+          onAttendance={setAttendanceTarget}
+        />
       ) : (
-        <div className="space-y-3">
-          {upcoming.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">📅 예정된 연습</p>
-              <div className="space-y-2">
-                {upcoming.map(r => <RehearsalCard key={r.id} r={r} onEdit={setEditItem} onDelete={handleDelete} onAttendance={setAttendanceTarget} />)}
-              </div>
-            </div>
-          )}
-          {past.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">✅ 완료된 연습</p>
-              <div className="space-y-2 opacity-70">
-                {past.map(r => <RehearsalCard key={r.id} r={r} onEdit={setEditItem} onDelete={handleDelete} onAttendance={setAttendanceTarget} />)}
-              </div>
-            </div>
-          )}
-        </div>
+        <CalendarView
+          rehearsals={rehearsals}
+          onDetail={setDetailTarget}
+        />
       )}
 
+      {/* 모달들 */}
       {(showAdd || editItem) && (
         <RehearsalForm
           concertId={concertId}
@@ -80,6 +96,53 @@ export default function RehearsalsTab({ concertId }: Props) {
           onClose={() => setAttendanceTarget(null)}
           onSaved={() => { load(); setAttendanceTarget(null); }}
         />
+      )}
+      {detailTarget && (
+        <RehearsalDetailModal
+          rehearsal={detailTarget}
+          onClose={() => setDetailTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─────── 리스트 뷰 ─────── */
+function ListView({ rehearsals, today, onEdit, onDelete, onAttendance }: {
+  rehearsals: Rehearsal[];
+  today: string;
+  onEdit: (r: Rehearsal) => void;
+  onDelete: (id: string) => void;
+  onAttendance: (r: Rehearsal) => void;
+}) {
+  const upcoming = rehearsals.filter(r => r.date >= today);
+  const past = rehearsals.filter(r => r.date < today);
+
+  if (rehearsals.length === 0) {
+    return <div className="card p-12 text-center text-gray-400">등록된 연습 일정이 없습니다.</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {upcoming.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-2">📅 예정된 연습</p>
+          <div className="space-y-2">
+            {upcoming.map(r => (
+              <RehearsalCard key={r.id} r={r} onEdit={onEdit} onDelete={onDelete} onAttendance={onAttendance} />
+            ))}
+          </div>
+        </div>
+      )}
+      {past.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-2">✅ 완료된 연습</p>
+          <div className="space-y-2 opacity-70">
+            {past.map(r => (
+              <RehearsalCard key={r.id} r={r} onEdit={onEdit} onDelete={onDelete} onAttendance={onAttendance} />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -123,6 +186,180 @@ function RehearsalCard({ r, onEdit, onDelete, onAttendance }: {
   );
 }
 
+/* ─────── 달력 뷰 ─────── */
+const TYPE_COLORS: Record<string, string> = {
+  '섹션연습': 'bg-blue-500',
+  '합주연습': 'bg-indigo-500',
+  '드레스리허설': 'bg-purple-500',
+  '기타': 'bg-gray-400',
+};
+
+function CalendarView({ rehearsals, onDetail }: {
+  rehearsals: Rehearsal[];
+  onDetail: (r: Rehearsal) => void;
+}) {
+  const [currentDate, setCurrentDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // 날짜별 연습 매핑
+  const byDate: Record<string, Rehearsal[]> = {};
+  rehearsals.forEach(r => {
+    if (!byDate[r.date]) byDate[r.date] = [];
+    byDate[r.date].push(r);
+  });
+
+  const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  // 6주 맞추기
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div className="card overflow-hidden">
+      {/* 달력 헤더 */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <button onClick={prevMonth} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+          <ChevronLeft size={18} />
+        </button>
+        <h3 className="text-base font-semibold text-gray-900">
+          {year}년 {month + 1}월
+        </h3>
+        <button onClick={nextMonth} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {/* 요일 헤더 */}
+      <div className="grid grid-cols-7 border-b border-gray-100">
+        {weekDays.map((d, i) => (
+          <div key={d} className={`py-2 text-center text-xs font-medium ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-500'}`}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* 날짜 칸 */}
+      <div className="grid grid-cols-7">
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`empty-${idx}`} className="min-h-[90px] border-r border-b border-gray-100 bg-gray-50/50" />;
+
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dayRehearsals = byDate[dateStr] || [];
+          const isToday = dateStr === today;
+          const isSunday = (firstDay + day - 1) % 7 === 0;
+          const isSaturday = (firstDay + day - 1) % 7 === 6;
+
+          return (
+            <div
+              key={dateStr}
+              className={`min-h-[90px] border-r border-b border-gray-100 p-1.5 ${isToday ? 'bg-indigo-50/40' : ''}`}
+            >
+              {/* 날짜 숫자 */}
+              <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-medium mb-1 ${
+                isToday ? 'bg-indigo-600 text-white' :
+                isSunday ? 'text-red-400' :
+                isSaturday ? 'text-blue-400' :
+                'text-gray-700'
+              }`}>
+                {day}
+              </div>
+
+              {/* 연습 칩 */}
+              <div className="space-y-0.5">
+                {dayRehearsals.slice(0, 2).map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => onDetail(r)}
+                    className={`w-full text-left px-1.5 py-0.5 rounded text-white text-[10px] font-medium truncate leading-tight ${TYPE_COLORS[r.type] || 'bg-gray-400'} hover:opacity-90 transition-opacity`}
+                    title={`${r.time} ${r.targetPieces?.join(', ') || r.type}`}
+                  >
+                    {r.time} {r.targetPieces?.[0] ? r.targetPieces[0].split(' - ')[1] || r.targetPieces[0] : r.type}
+                  </button>
+                ))}
+                {dayRehearsals.length > 2 && (
+                  <p className="text-[10px] text-gray-400 pl-1">+{dayRehearsals.length - 2}개</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 범례 */}
+      <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-3">
+        {Object.entries(TYPE_COLORS).map(([type, color]) => (
+          <div key={type} className="flex items-center gap-1.5">
+            <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
+            <span className="text-xs text-gray-500">{type}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────── 연습 상세 팝업 ─────── */
+function RehearsalDetailModal({ rehearsal, onClose }: { rehearsal: Rehearsal; onClose: () => void; }) {
+  return (
+    <Modal title="연습 상세 정보" onClose={onClose} size="sm">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="badge bg-indigo-50 text-indigo-700">{rehearsal.type}</span>
+          <span className="text-sm font-semibold text-gray-900">{rehearsal.date} {rehearsal.time}</span>
+        </div>
+        <div className="space-y-2 text-sm">
+          <InfoRow label="장소" value={rehearsal.place} />
+          {rehearsal.targetPieces?.length ? <InfoRow label="대상 곡목" value={rehearsal.targetPieces.join(', ')} /> : null}
+          {rehearsal.conductorEvaluation && <InfoRow label="지휘자 평가" value={rehearsal.conductorEvaluation} />}
+          {rehearsal.progressRate != null && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">진행도</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-400 rounded-full" style={{ width: `${rehearsal.progressRate}%` }} />
+                </div>
+                <span className="text-xs font-medium text-gray-700">{rehearsal.progressRate}%</span>
+              </div>
+            </div>
+          )}
+          {rehearsal.nextTask && <InfoRow label="다음 과제" value={rehearsal.nextTask} />}
+          {rehearsal.memo && <InfoRow label="메모" value={rehearsal.memo} />}
+        </div>
+      </div>
+      <div className="flex justify-end mt-4">
+        <button className="btn-secondary" onClick={onClose}>닫기</button>
+      </div>
+    </Modal>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-sm text-gray-800 mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+/* ─────── 연습 추가/편집 폼 ─────── */
 function RehearsalForm({ concertId, item, onClose, onSaved }: {
   concertId: string; item: Rehearsal | null; onClose: () => void; onSaved: () => void;
 }) {
@@ -140,10 +377,10 @@ function RehearsalForm({ concertId, item, onClose, onSaved }: {
     });
   }, []);
 
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.date || !form.place) { alert('날짜와 장소를 입력해 주세요.'); return; }
+    if (!form.date || !form.place) { toast.error('날짜와 장소를 입력해 주세요.'); return; }
     const data: Rehearsal = {
       id: item?.id || crypto.randomUUID(), concertId,
       date: form.date, time: form.time, place: form.place, type: form.type,
@@ -155,6 +392,7 @@ function RehearsalForm({ concertId, item, onClose, onSaved }: {
     };
     if (item) await db.rehearsals.put(data);
     else await db.rehearsals.add(data);
+    toast.success('연습 일정이 저장되었습니다.');
     onSaved();
   };
 
@@ -170,10 +408,7 @@ function RehearsalForm({ concertId, item, onClose, onSaved }: {
             {['섹션연습', '합주연습', '드레스리허설', '기타'].map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
-        <div>
-          <label className="label">진행도 (%)</label>
-          <input type="number" min="0" max="100" className="input" value={form.progressRate} onChange={e => set('progressRate', +e.target.value)} />
-        </div>
+        <div><label className="label">진행도 (%)</label><input type="number" min="0" max="100" className="input" value={form.progressRate} onChange={e => set('progressRate', +e.target.value)} /></div>
         <div className="col-span-2"><label className="label">대상 곡목 (쉼표로 구분)</label><input className="input" value={form.targetPieces} onChange={e => set('targetPieces', e.target.value)} placeholder="Vivaldi - Four Seasons, Mozart - Symphony" /></div>
         <div>
           <label className="label">지휘자 평가</label>
@@ -193,6 +428,7 @@ function RehearsalForm({ concertId, item, onClose, onSaved }: {
   );
 }
 
+/* ─────── 출석 체크 모달 ─────── */
 function AttendanceModal({ rehearsal, concertId, onClose, onSaved }: {
   rehearsal: Rehearsal; concertId: string; onClose: () => void; onSaved: () => void;
 }) {
@@ -221,8 +457,6 @@ function AttendanceModal({ rehearsal, concertId, onClose, onSaved }: {
         id: crypto.randomUUID(), rehearsalId: rehearsal.id, concertId, memberId, status,
       });
     }
-
-    // 출석률 자동 계산
     const allRehearsals = await db.rehearsals.where('concertId').equals(concertId).toArray();
     const attended = await db.rehearsalAttendance.where('concertId').equals(concertId).and(a => a.memberId === memberId && a.status === '출석').count();
     const rate = allRehearsals.length > 0 ? Math.round(attended / allRehearsals.length * 100) : 0;
