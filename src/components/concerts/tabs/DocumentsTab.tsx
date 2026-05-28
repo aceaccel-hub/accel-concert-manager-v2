@@ -5,7 +5,7 @@ import { db } from '../../../db/database';
 import type { Concert } from '../../../types';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
   TextRun, HeadingLevel, AlignmentType, WidthType, BorderStyle,
@@ -199,103 +199,99 @@ async function exportExcel(concert: Concert, type: string) {
 }
 
 /* ────────────────────────────────────────
-   PDF 내보내기
+   PDF 내보내기 (html2canvas 방식 — 한글 완벽 지원)
 ──────────────────────────────────────── */
-async function exportPDF(concert: Concert, type: string) {
-  const { programs, cms, allMem, rehearsals, budgets, checklists } = await fetchData(concert.id);
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
+async function exportPDF(concert: Concert, type: string, previewText: string) {
   const now = new Date();
-  const docNum = `ACM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const docNum = `ACM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const dateStr = now.toLocaleDateString('ko-KR');
 
-  // ── 헤더 영역 ──
-  doc.setFillColor(63, 63, 203); // indigo
-  doc.rect(0, 0, 210, 28, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('ACCEL ORCHESTRA', 14, 12);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Doc No: ${docNum}   Issued: ${now.toLocaleDateString('ko-KR')}`, 14, 20);
+  // 미리보기 텍스트에서 헤더 3줄 제거하고 본문만 추출
+  const bodyLines = previewText.split('\n').slice(4).join('\n');
 
-  // ── 연주회 정보 ──
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  const titleLines = doc.splitTextToSize(concert.title, 180) as string[];
-  doc.text(titleLines, 14, 36);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(`${concert.date} ${concert.time}  |  ${concert.place}  |  지휘: ${concert.conductor}`, 14, 44);
-
-  // 구분선
-  doc.setDrawColor(200, 200, 200);
-  doc.line(14, 47, 196, 47);
-
-  // ── 문서 제목 ──
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(63, 63, 203);
-  doc.text(`■ ${type}`, 14, 54);
-  doc.setTextColor(30, 30, 30);
-
-  // ── 내용 테이블 ──
-  let head: string[][] = [];
-  let body: (string | number)[][] = [];
-
-  if (type === '곡목표') {
-    head = [['#', '작곡가', '곡명', '악장', '협연자', '시간', '악보', '파트보']];
-    body = programs.map(p => [p.order, p.composer, p.title, p.movement ?? '', p.soloist ?? '', p.duration ? `${p.duration}분` : '-', p.scoreStatus, p.partScoreStatus]);
-  } else if (type === '단원명단') {
-    const members = cms.map(cm => ({ ...cm, member: allMem.find(m => m.id === cm.memberId) }));
-    head = [['이름', '악기', '파트', '역할', '출석률', '사례비', '구분']];
-    body = members.map(m => [m.member?.name ?? '', m.member?.instrument ?? '', m.part ?? m.member?.part ?? '', m.role ?? m.member?.role ?? '', m.attendanceRate != null ? `${m.attendanceRate}%` : '-', m.fee ? `${m.fee.toLocaleString()}원` : '-', m.isReserve ? '예비' : '정단원']);
-  } else if (type === '리허설일정표') {
-    head = [['날짜', '시간', '장소', '유형', '대상곡목', '진행도']];
-    body = rehearsals.map(r => [r.date, r.time, r.place, r.type, (r.targetPieces ?? []).join(', '), r.progressRate != null ? `${r.progressRate}%` : '-']);
-  } else if (type === '정산표') {
-    const income = budgets.filter(b => b.type === '수입');
-    const expense = budgets.filter(b => b.type === '지출');
-    const totalIn = income.reduce((s, b) => s + b.plannedAmount, 0);
-    const totalOut = expense.reduce((s, b) => s + b.paidAmount, 0);
-    head = [['구분', '카테고리', '항목명', '예산(원)', '집행액(원)', '잔액(원)', '상태']];
-    body = [
-      ...budgets.map(b => [b.type, b.category, b.title, b.plannedAmount.toLocaleString(), b.paidAmount.toLocaleString(), (b.plannedAmount - b.paidAmount).toLocaleString(), b.paymentStatus]),
-      ['', '', '[ 총 수입 ]', totalIn.toLocaleString(), '', '', ''],
-      ['', '', '[ 총 지출 ]', '', totalOut.toLocaleString(), '', ''],
-      ['', '', '[ 잔여 ]', '', '', (totalIn - totalOut).toLocaleString(), ''],
-    ];
-  } else if (type === '체크리스트') {
-    head = [['항목', '완료']];
-    body = checklists.map(c => [c.title, c.isDone ? '✓ 완료' : '미완료']);
-  } else {
-    head = [['내용']];
-    body = [[await generatePreviewText(concert, type)]];
-  }
-
-  autoTable(doc, {
-    head,
-    body,
-    startY: 58,
-    styles: { fontSize: 9, cellPadding: 3, lineColor: [220, 220, 220], lineWidth: 0.2 },
-    headStyles: { fillColor: [63, 63, 203], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    alternateRowStyles: { fillColor: [248, 248, 255] },
-    margin: { left: 14, right: 14 },
+  // 화면 밖에 렌더링할 HTML 요소 생성
+  const wrap = document.createElement('div');
+  Object.assign(wrap.style, {
+    position: 'fixed',
+    top: '0',
+    left: '-9999px',
+    width: '794px',
+    background: '#ffffff',
+    fontFamily: "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'AppleGothic', sans-serif",
+    fontSize: '13px',
+    lineHeight: '1.75',
+    color: '#1a1a1a',
+    boxSizing: 'border-box',
   });
 
-  // ── 푸터 ──
-  const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(160, 160, 160);
-    doc.text(`아첼 오케스트라 공식 문서 · ${docNum} · ${i}/${pageCount}`, 14, 290);
-  }
+  wrap.innerHTML = `
+    <div style="background:#3f3fcb;color:#ffffff;padding:16px 28px 14px;">
+      <div style="font-size:18px;font-weight:700;letter-spacing:0.3px;">아첼 오케스트라</div>
+      <div style="font-size:10px;margin-top:3px;opacity:0.85;">
+        문서번호: ${docNum} &nbsp;&nbsp;|&nbsp;&nbsp; 발행일: ${dateStr}
+      </div>
+    </div>
+    <div style="padding:22px 28px 8px;">
+      <div style="font-size:16px;font-weight:700;color:#111;">${concert.title}</div>
+      <div style="font-size:11px;color:#888;margin-top:5px;">
+        ${concert.date} ${concert.time} &nbsp;|&nbsp; ${concert.place}
+        ${concert.conductor ? ` &nbsp;|&nbsp; 지휘: ${concert.conductor}` : ''}
+      </div>
+      <hr style="border:none;border-top:1.5px solid #e5e5e5;margin:14px 0 16px;">
+      <div style="font-size:13px;font-weight:700;color:#3f3fcb;margin-bottom:14px;">■ ${type}</div>
+      <pre style="
+        font-family: 'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic','AppleGothic',sans-serif;
+        font-size: 12.5px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        color: #222;
+        margin: 0;
+        padding-bottom: 28px;
+        line-height: 1.8;
+      ">${bodyLines}</pre>
+    </div>
+    <div style="background:#f8f8ff;border-top:1px solid #dde;padding:8px 28px;font-size:9.5px;color:#888;">
+      아첼 오케스트라 공식 문서 &nbsp;·&nbsp; ${docNum} &nbsp;·&nbsp; 발행일 ${dateStr}
+    </div>
+  `;
 
-  doc.save(`아첼_${concert.title}_${type}.pdf`);
-  toast.success('PDF 파일이 저장되었습니다.');
+  document.body.appendChild(wrap);
+
+  try {
+    const canvas = await html2canvas(wrap, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
+    document.body.removeChild(wrap);
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageW = 210;
+    const pageH = 297;
+    // 이미지 너비를 A4 너비에 맞춤
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+
+    let printed = 0;
+    let page = 0;
+    while (printed < imgH) {
+      if (page > 0) pdf.addPage();
+      // 현재 페이지에서 잘릴 y 위치만큼 이미지를 올림
+      pdf.addImage(imgData, 'PNG', 0, -printed, imgW, imgH);
+      printed += pageH;
+      page++;
+    }
+
+    pdf.save(`아첼_${concert.title}_${type}.pdf`);
+    toast.success('PDF 파일이 저장되었습니다.');
+  } catch (err) {
+    if (document.body.contains(wrap)) document.body.removeChild(wrap);
+    toast.error('PDF 생성 중 오류가 발생했습니다.');
+    throw err;
+  }
 }
 
 /* ────────────────────────────────────────
@@ -430,7 +426,7 @@ export default function DocumentsTab({ concert }: Props) {
   const handleExport = async (format: 'pdf' | 'excel' | 'word') => {
     setExporting(format);
     try {
-      if (format === 'pdf')   await exportPDF(concert, selectedType);
+      if (format === 'pdf')   await exportPDF(concert, selectedType, preview);
       if (format === 'excel') await exportExcel(concert, selectedType);
       if (format === 'word')  await exportWord(concert, selectedType);
     } finally {
