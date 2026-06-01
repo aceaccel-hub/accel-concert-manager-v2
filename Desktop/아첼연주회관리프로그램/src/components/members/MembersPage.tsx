@@ -4,6 +4,7 @@ import { Plus, Search, Trash2, Edit2, Star, PlusCircle } from 'lucide-react';
 import type { Member, MemberRole, MemberGrade, MemberStatus, Concert } from '../../types';
 import StatusBadge from '../common/StatusBadge';
 import Modal from '../common/Modal';
+import Combobox from '../common/Combobox';
 import {
   getAllMembers,
   createMember,
@@ -229,6 +230,7 @@ export default function MembersPage() {
       {(showForm || editItem) && (
         <MemberForm
           item={editItem}
+          allMembers={members}
           onClose={() => {
             setShowForm(false);
             setEditItem(null);
@@ -282,10 +284,12 @@ export default function MembersPage() {
 
 function MemberForm({
   item,
+  allMembers,
   onClose,
   onSaved,
 }: {
   item: Member | null;
+  allMembers: Member[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -374,84 +378,71 @@ function MemberForm({
         </div>
         <div>
           <label className="label">악기</label>
-          <select
-            className="input"
+          <Combobox
+            category="instrument"
             value={form.instrument}
-            onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value }))}
-          >
-            <option value="">선택하세요</option>
-            {INSTRUMENTS.map((inst) => (
-              <option key={inst} value={inst}>
-                {inst}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setForm((f) => ({ ...f, instrument: value }))}
+            defaultOptions={INSTRUMENTS}
+          />
         </div>
         <div>
           <label className="label">파트</label>
-          <input
-            className="input"
+          <Combobox
+            category="part"
             value={form.part}
-            onChange={(e) => setForm((f) => ({ ...f, part: e.target.value }))}
-            placeholder="Violin 1"
+            onChange={(value) => setForm((f) => ({ ...f, part: value }))}
+            defaultOptions={PARTS}
           />
         </div>
         <div>
           <label className="label">역할</label>
-          <select
-            className="input"
+          <Combobox
+            category="role"
             value={form.role}
-            onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as MemberRole }))}
-          >
-            {(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map(
-              (r) => (
-                <option key={r}>{r}</option>
-              )
-            )}
-          </select>
+            onChange={(value) => setForm((f) => ({ ...f, role: value as MemberRole }))}
+            defaultOptions={['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자']}
+          />
         </div>
         <div>
           <label className="label">연락처</label>
-          <input
-            className="input"
+          <Combobox
+            category="phone"
             value={form.phone}
-            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, phone: value }))}
+            defaultOptions={Array.from(new Set(allMembers.map((m) => m.phone).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">이메일</label>
-          <input
-            className="input"
+          <Combobox
+            category="email"
             value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, email: value }))}
+            defaultOptions={Array.from(new Set(allMembers.map((m) => m.email).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">국적</label>
-          <input
-            className="input"
+          <Combobox
+            category="nationality"
             value={form.nationality}
-            onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))}
-            placeholder="대한민국"
+            onChange={(value) => setForm((f) => ({ ...f, nationality: value }))}
+            defaultOptions={Array.from(new Set(allMembers.map((m) => m.nationality).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">신분증 유형</label>
-          <select
-            className="input"
+          <Combobox
+            category="idNumberType"
             value={form.idNumberType}
-            onChange={(e) =>
+            onChange={(value) =>
               setForm((f) => ({
                 ...f,
-                idNumberType: e.target.value as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
+                idNumberType: value as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
               }))
             }
-          >
-            <option value="">선택 안 함</option>
-            <option value="주민등록번호">주민등록번호</option>
-            <option value="외국인등록번호">외국인등록번호</option>
-            <option value="여권번호">여권번호</option>
-          </select>
+            defaultOptions={['주민등록번호', '외국인등록번호', '여권번호']}
+          />
         </div>
         <div className="col-span-2">
           <label className="label">신분증 번호</label>
@@ -473,10 +464,11 @@ function MemberForm({
         </div>
         <div>
           <label className="label">은행</label>
-          <input
-            className="input"
+          <Combobox
+            category="bankName"
             value={form.bankName}
-            onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, bankName: value }))}
+            defaultOptions={Array.from(new Set(allMembers.map((m) => m.bankName).filter(Boolean)))}
           />
         </div>
         <div>
@@ -489,44 +481,39 @@ function MemberForm({
         </div>
         <div>
           <label className="label">예금주명 (본인 이외)</label>
-          <input
-            className="input"
+          <Combobox
+            category="accountHolder"
             value={form.accountHolder}
-            onChange={(e) => setForm((f) => ({ ...f, accountHolder: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, accountHolder: value }))}
+            defaultOptions={Array.from(new Set(allMembers.map((m) => m.accountHolder).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">예금주와의 관계</label>
-          <input
-            className="input"
+          <Combobox
+            category="accountHolderRelation"
             value={form.accountHolderRelation}
-            onChange={(e) => setForm((f) => ({ ...f, accountHolderRelation: e.target.value }))}
-            placeholder="배우자, 부모, 자녀 등"
+            onChange={(value) => setForm((f) => ({ ...f, accountHolderRelation: value }))}
+            defaultOptions={Array.from(new Set(allMembers.map((m) => m.accountHolderRelation).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">등급</label>
-          <select
-            className="input"
+          <Combobox
+            category="grade"
             value={form.grade}
-            onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value as MemberGrade }))}
-          >
-            {(['정단원', '준단원', '객원'] as MemberGrade[]).map((g) => (
-              <option key={g}>{g}</option>
-            ))}
-          </select>
+            onChange={(value) => setForm((f) => ({ ...f, grade: value as MemberGrade }))}
+            defaultOptions={['정단원', '준단원', '객원']}
+          />
         </div>
         <div>
           <label className="label">상태</label>
-          <select
-            className="input"
+          <Combobox
+            category="status"
             value={form.status}
-            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as MemberStatus }))}
-          >
-            {(['활동중', '휴식중', '탈퇴'] as MemberStatus[]).map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
+            onChange={(value) => setForm((f) => ({ ...f, status: value as MemberStatus }))}
+            defaultOptions={['활동중', '휴식중', '탈퇴']}
+          />
         </div>
         <div>
           <label className="label">가입일</label>

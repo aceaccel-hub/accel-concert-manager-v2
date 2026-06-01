@@ -4,6 +4,7 @@ import { Plus, Search, Edit2, Trash2, Link2 } from 'lucide-react';
 import type { Group, GroupRole, GroupStatus, Concert } from '../../types';
 import StatusBadge from '../common/StatusBadge';
 import Modal from '../common/Modal';
+import Combobox from '../common/Combobox';
 import {
   getAllGroups,
   createGroup,
@@ -163,6 +164,7 @@ export default function GroupsPage() {
       {(showForm || editItem) && (
         <GroupForm
           item={editItem}
+          allGroups={groups}
           onClose={() => {
             setShowForm(false);
             setEditItem(null);
@@ -216,10 +218,12 @@ export default function GroupsPage() {
 
 function GroupForm({
   item,
+  allGroups,
   onClose,
   onSaved,
 }: {
   item: Group | null;
+  allGroups: Group[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -295,27 +299,29 @@ function GroupForm({
         </div>
         <div>
           <label className="label">유형</label>
-          <input
-            className="input"
+          <Combobox
+            category="groupType"
             value={form.type}
-            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-            placeholder="오케스트라, 합창단"
+            onChange={(value) => setForm((f) => ({ ...f, type: value }))}
+            defaultOptions={Array.from(new Set(allGroups.map((g) => g.type).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">대표자</label>
-          <input
-            className="input"
+          <Combobox
+            category="representative"
             value={form.representative}
-            onChange={(e) => setForm((f) => ({ ...f, representative: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, representative: value }))}
+            defaultOptions={Array.from(new Set(allGroups.map((g) => g.representative).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">담당자</label>
-          <input
-            className="input"
+          <Combobox
+            category="groupManager"
             value={form.manager}
-            onChange={(e) => setForm((f) => ({ ...f, manager: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, manager: value }))}
+            defaultOptions={Array.from(new Set(allGroups.map((g) => g.manager).filter(Boolean)))}
           />
         </div>
         <div>
@@ -352,33 +358,30 @@ function GroupForm({
         </div>
         <div>
           <label className="label">사업자등록번호</label>
-          <input
-            className="input"
+          <Combobox
+            category="businessNumber"
             value={form.businessNumber}
-            onChange={(e) => setForm((f) => ({ ...f, businessNumber: e.target.value }))}
-            placeholder="123-45-67890"
+            onChange={(value) => setForm((f) => ({ ...f, businessNumber: value }))}
+            defaultOptions={Array.from(new Set(allGroups.map((g) => g.businessNumber).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">정기 연습</label>
-          <input
-            className="input"
+          <Combobox
+            category="regularSchedule"
             value={form.regularSchedule}
-            onChange={(e) => setForm((f) => ({ ...f, regularSchedule: e.target.value }))}
-            placeholder="매주 토요일 오후 2시"
+            onChange={(value) => setForm((f) => ({ ...f, regularSchedule: value }))}
+            defaultOptions={Array.from(new Set(allGroups.map((g) => g.regularSchedule).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">상태</label>
-          <select
-            className="input"
+          <Combobox
+            category="groupStatus"
             value={form.status}
-            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as GroupStatus }))}
-          >
-            {(['운영중', '휴식중', '해산'] as GroupStatus[]).map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
+            onChange={(value) => setForm((f) => ({ ...f, status: value as GroupStatus }))}
+            defaultOptions={['운영중', '휴식중', '해산']}
+          />
         </div>
         <div className="col-span-2">
           <label className="label">비고</label>
