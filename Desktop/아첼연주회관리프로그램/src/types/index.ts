@@ -34,7 +34,10 @@ export type DocumentType =
   | '프로그램북원고'
   | '공지문'
   | '정산표'
-  | '기타';
+  | '기타'
+  | '단원모집공고문'
+  | '기획서'
+  | '견적서';
 
 export type Difficulty = '초급' | '중급' | '고급';
 export type MemberGrade = '정단원' | '준단원' | '객원';

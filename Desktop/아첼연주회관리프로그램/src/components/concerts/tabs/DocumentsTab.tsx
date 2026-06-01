@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { FileText, Clipboard, Eye, Plus, Trash2, FileSpreadsheet, FileDown } from 'lucide-react';
+import { FileText, Clipboard, Eye, Plus, Trash2, FileSpreadsheet, FileDown, X, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
-import type { ConcertDocument, DocumentType } from '../../../types';
+import type { ConcertDocument, DocumentType, Member, Concert } from '../../../types';
 import {
   getDocuments,
   createDocument,
   deleteDocument,
 } from '../../../hooks/useDocuments';
 import { getProgramItems } from '../../../hooks/useProgram';
-import { getConcertMembers } from '../../../hooks/useMembers';
+import { getConcertMembers, getAllMembers } from '../../../hooks/useMembers';
 import { getRehearsals } from '../../../hooks/useRehearsals';
 import { getBudgets } from '../../../hooks/useBudget';
 import { getConcertGroups } from '../../../hooks/useGroups';
@@ -25,6 +25,9 @@ const DOC_TYPES: { type: DocumentType; icon: string; desc: string }[] = [
   { type: '프로그램북원고', icon: '📖', desc: '공연 프로그램북 원고' },
   { type: '공지문', icon: '📢', desc: '단원 공지문' },
   { type: '체크리스트', icon: '✅', desc: '준비 체크리스트' },
+  { type: '단원모집공고문', icon: '📣', desc: 'Guest 단원 모집 공고' },
+  { type: '기획서', icon: '📋', desc: '연주회 기획서' },
+  { type: '견적서', icon: '🧾', desc: '견적 주문서' },
 ];
 
 export default function DocumentsTab() {
@@ -733,6 +736,12 @@ ${concert.title}
         <div className="card flex-1 p-5 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400">생성 중...</div>
+          ) : selectedType === '단원모집공고문' ? (
+            <RecruitmentNoticeBuilder concert={concert} onPreviewChange={setPreview} />
+          ) : selectedType === '기획서' ? (
+            <ConcertPlanBuilder concert={concert} concertId={concertId} />
+          ) : selectedType === '견적서' ? (
+            <EstimateBuilder concertId={concertId} />
           ) : preview ? (
             <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
               {preview}
@@ -780,6 +789,417 @@ ${concert.title}
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ============ 3개의 빌더 컴포넌트 ============
+
+interface BuilderProps {
+  concert: Concert;
+  onPreviewChange?: (preview: string) => void;
+}
+
+// 단원모집공고문 빌더
+function RecruitmentNoticeBuilder({
+  concert,
+  onPreviewChange,
+}: BuilderProps) {
+  const [needList, setNeedList] = useState<{ instrument: string; count: number }[]>([]);
+  const [guestMembers, setGuestMembers] = useState<Member[]>([]);
+  const [instruments, setInstruments] = useState<string[]>([]);
+  const [showPastGuests, setShowPastGuests] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const allMembers = await getAllMembers();
+      const guests = allMembers.filter((m) => m.role === '객원');
+      const uniqueInstruments = [...new Set(allMembers.map((m) => m.instrument))].sort();
+      setGuestMembers(guests);
+      setInstruments(uniqueInstruments);
+    };
+    load();
+  }, []);
+
+  const generatePreview = () => {
+    const needText = needList.length > 0
+      ? needList.map((n) => `  - ${n.instrument}: ${n.count}명`).join('\n')
+      : '(필요 인원 미지정)';
+
+    const preview = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【 단원 모집 공고 】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+안녕하세요.
+
+이번 ${concert.title}을 위해 다음과 같이 단원을 모집합니다.
+
+■ 공연 일시: ${concert.date} ${concert.time}
+■ 공연 장소: ${concert.place}
+
+■ 모집 인원:
+${needText}
+
+관심 있으신 분은 아래로 연락 주세요.
+감사합니다.`;
+
+    onPreviewChange?.(preview);
+  };
+
+  useEffect(() => {
+    generatePreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needList, concert]);
+
+  const addNeed = () => {
+    setNeedList([...needList, { instrument: instruments[0] || '', count: 1 }]);
+  };
+
+  const updateNeed = (idx: number, instrument: string, count: number) => {
+    const newList = [...needList];
+    newList[idx] = { instrument, count };
+    setNeedList(newList);
+  };
+
+  const removeNeed = (idx: number) => {
+    setNeedList(needList.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold text-gray-900 mb-3">모집 인원 설정</h3>
+        <div className="space-y-2">
+          {needList.map((n, idx) => (
+            <div key={idx} className="flex gap-2 items-end">
+              <select
+                className="input flex-1"
+                value={n.instrument}
+                onChange={(e) => updateNeed(idx, e.target.value, n.count)}
+              >
+                {instruments.map((inst) => (
+                  <option key={inst}>{inst}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={1}
+                className="input w-16"
+                value={n.count}
+                onChange={(e) => updateNeed(idx, n.instrument, +e.target.value)}
+              />
+              <button
+                onClick={() => removeNeed(idx)}
+                className="text-gray-400 hover:text-red-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={addNeed}
+          className="btn-secondary text-sm mt-2"
+        >
+          <Plus size={14} /> 인원 추가
+        </button>
+      </div>
+
+      <div className="border-t pt-4">
+        <button
+          onClick={() => setShowPastGuests(!showPastGuests)}
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+        >
+          <ChevronDown
+            size={16}
+            className={`transition-transform ${showPastGuests ? 'rotate-180' : ''}`}
+          />
+          이전 객원 단원 ({guestMembers.length}명)
+        </button>
+
+        {showPastGuests && (
+          <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+            {guestMembers.length > 0 ? (
+              guestMembers.map((m) => (
+                <div key={m.id} className="text-xs p-2 bg-gray-50 rounded">
+                  <p className="font-medium text-gray-900">{m.name}</p>
+                  <p className="text-gray-600">
+                    {m.instrument} {m.part ? `· ${m.part}` : ''}
+                  </p>
+                  {m.phone && <p className="text-gray-500">{m.phone}</p>}
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-gray-400 py-2">등록된 객원 단원이 없습니다.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={() => window.print()}
+        className="btn-secondary w-full"
+      >
+        <FileDown size={14} /> 인쇄
+      </button>
+    </div>
+  );
+}
+
+// 기획서 빌더
+function ConcertPlanBuilder({ concert, concertId }: { concert: Concert; concertId: string }) {
+  const [data, setData] = useState<{
+    programs: any[];
+    cms: any[];
+    cgs: any[];
+    memo: string;
+  }>({ programs: [], cms: [], cgs: [], memo: '' });
+
+  useEffect(() => {
+    const load = async () => {
+      const [programs, cms, cgs] = await Promise.all([
+        getProgramItems(concertId),
+        getConcertMembers(concertId),
+        getConcertGroups(concertId),
+      ]);
+      setData({ programs, cms, cgs, memo: '' });
+    };
+    load();
+  }, [concertId]);
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+        <h3 className="font-semibold text-gray-900 mb-2">연주회 기본 정보</h3>
+        <div className="text-sm text-gray-700 space-y-1">
+          <p><strong>제목:</strong> {concert.title}</p>
+          <p><strong>일시:</strong> {concert.date} {concert.time}</p>
+          <p><strong>장소:</strong> {concert.place}</p>
+          <p><strong>지휘:</strong> {concert.conductor}</p>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-semibold text-gray-900 mb-2">프로그램</h3>
+        <table className="w-full text-sm border border-gray-200">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="px-2 py-1 text-left">순</th>
+              <th className="px-2 py-1 text-left">작곡가</th>
+              <th className="px-2 py-1 text-left">곡명</th>
+              <th className="px-2 py-1 text-center">시간</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.programs.map((p) => (
+              <tr key={p.id} className="border-t">
+                <td className="px-2 py-1">{p.order}</td>
+                <td className="px-2 py-1">{p.composer}</td>
+                <td className="px-2 py-1">{p.title}</td>
+                <td className="px-2 py-1 text-center">{p.duration || '-'}분</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <h3 className="font-semibold text-gray-900 mb-2">출연 단원</h3>
+        <table className="w-full text-sm border border-gray-200">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="px-2 py-1 text-left">이름</th>
+              <th className="px-2 py-1 text-left">악기</th>
+              <th className="px-2 py-1 text-left">파트</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.cms.map((cm) => (
+              <tr key={cm.id} className="border-t">
+                <td className="px-2 py-1">{cm.member?.name}</td>
+                <td className="px-2 py-1">{cm.member?.instrument}</td>
+                <td className="px-2 py-1">{cm.part || cm.member?.part || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <label className="label">특이사항</label>
+        <textarea
+          className="input h-20 resize-none"
+          value={data.memo}
+          onChange={(e) => setData({ ...data, memo: e.target.value })}
+          placeholder="기획서에 포함할 추가 사항을 입력하세요"
+        />
+      </div>
+
+      <button
+        onClick={() => window.print()}
+        className="btn-secondary w-full"
+      >
+        <FileDown size={14} /> 인쇄
+      </button>
+    </div>
+  );
+}
+
+// 견적서 빌더
+function EstimateBuilder({ concertId }: { concertId: string }) {
+  const [items, setItems] = useState<{ name: string; qty: number; unitPrice: number }[]>([]);
+  const [recipient, setRecipient] = useState('');
+  const [sender, setSender] = useState('');
+  const [vatEnabled, setVatEnabled] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const budgets = await getBudgets(concertId);
+      const expenseItems = budgets
+        .filter((b) => b.type === '지출')
+        .map((b) => ({ name: b.title, qty: 1, unitPrice: b.plannedAmount }));
+      setItems(expenseItems);
+    };
+    load();
+  }, [concertId]);
+
+  const totalSupply = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const totalVat = vatEnabled ? Math.round(totalSupply * 0.1) : 0;
+  const totalAmount = totalSupply + totalVat;
+
+  const addItem = () => {
+    setItems([...items, { name: '', qty: 1, unitPrice: 0 }]);
+  };
+
+  const updateItem = (idx: number, field: string, value: any) => {
+    const newItems = [...items];
+    newItems[idx] = { ...newItems[idx], [field]: value };
+    setItems(newItems);
+  };
+
+  const removeItem = (idx: number) => {
+    setItems(items.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="label">수신인</label>
+          <input
+            type="text"
+            className="input"
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            placeholder="거래처 명"
+          />
+        </div>
+        <div>
+          <label className="label">발신인</label>
+          <input
+            type="text"
+            className="input"
+            value={sender}
+            onChange={(e) => setSender(e.target.value)}
+            placeholder="단체 명"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-gray-900">견적 항목</h3>
+          <button onClick={addItem} className="btn-secondary text-sm py-1 px-2">
+            <Plus size={14} /> 추가
+          </button>
+        </div>
+
+        <table className="w-full text-sm border border-gray-200">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="px-2 py-1 text-left">항목명</th>
+              <th className="px-2 py-1 text-center w-12">수량</th>
+              <th className="px-2 py-1 text-center w-20">단가</th>
+              <th className="px-2 py-1 text-right w-20">공급가액</th>
+              <th className="px-2 py-1 text-center w-12"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => {
+              const supply = item.qty * item.unitPrice;
+              return (
+                <tr key={idx} className="border-t">
+                  <td className="px-2 py-1">
+                    <input
+                      type="text"
+                      className="input w-full py-0.5"
+                      value={item.name}
+                      onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                      placeholder="항목명"
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <input
+                      type="number"
+                      min={1}
+                      className="input w-full text-center py-0.5"
+                      value={item.qty}
+                      onChange={(e) => updateItem(idx, 'qty', +e.target.value)}
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      className="input w-full text-right py-0.5"
+                      value={item.unitPrice}
+                      onChange={(e) => updateItem(idx, 'unitPrice', +e.target.value)}
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-right">{supply.toLocaleString()}</td>
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      onClick={() => removeItem(idx)}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="border-t pt-4 space-y-2">
+        <div className="flex justify-between text-sm">
+          <span>공급가액:</span>
+          <span className="font-semibold">{totalSupply.toLocaleString()}원</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={vatEnabled}
+              onChange={(e) => setVatEnabled(e.target.checked)}
+            />
+            부가세 (10%)
+          </label>
+          <span className="font-semibold">{totalVat.toLocaleString()}원</span>
+        </div>
+        <div className="flex justify-between text-base font-bold bg-blue-50 p-2 rounded">
+          <span>합계:</span>
+          <span>{totalAmount.toLocaleString()}원</span>
+        </div>
+      </div>
+
+      <button
+        onClick={() => window.print()}
+        className="btn-secondary w-full"
+      >
+        <FileDown size={14} /> 인쇄
+      </button>
     </div>
   );
 }
