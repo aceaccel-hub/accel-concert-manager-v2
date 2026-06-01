@@ -16,6 +16,34 @@ import { getAllConcerts } from '../../hooks/useConcert';
 
 const PARTS = ['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Bass', '관악기', '타악기', '기타'];
 
+const INSTRUMENTS = [
+  '바이올린',
+  '비올라',
+  '첼로',
+  '콘트라베이스',
+  '플루트',
+  '피콜로',
+  '오보에',
+  '잉글리시 호른',
+  '클라리넷',
+  '베이스 클라리넷',
+  '바순',
+  '콘트라바순',
+  '호른',
+  '트럼펫',
+  '트롬본',
+  '베이스 트롬본',
+  '튜바',
+  '팀파니',
+  '타악기',
+  '하프',
+  '피아노',
+  '오르간',
+  '성악',
+  '합창',
+  '기타',
+];
+
 export default function MembersPage() {
   const navigate = useNavigate();
   const { settings, setSelectedConcertId } = useStore();
@@ -346,11 +374,18 @@ function MemberForm({
         </div>
         <div>
           <label className="label">악기</label>
-          <input
+          <select
             className="input"
             value={form.instrument}
             onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value }))}
-          />
+          >
+            <option value="">선택하세요</option>
+            {INSTRUMENTS.map((inst) => (
+              <option key={inst} value={inst}>
+                {inst}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="label">파트</label>
