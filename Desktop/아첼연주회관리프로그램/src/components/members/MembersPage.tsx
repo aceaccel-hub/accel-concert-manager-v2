@@ -5,6 +5,7 @@ import type { Member, MemberRole, MemberGrade, MemberStatus, Concert } from '../
 import StatusBadge from '../common/StatusBadge';
 import Modal from '../common/Modal';
 import Combobox from '../common/Combobox';
+import { showToast } from '../common/Toast';
 import {
   getAllMembers,
   createMember,
@@ -343,12 +344,19 @@ function MemberForm({
       alert('이름을 입력해 주세요.');
       return;
     }
-    if (item) {
-      await updateMember(item.id, form);
-    } else {
-      await createMember(form);
+    try {
+      if (item) {
+        await updateMember(item.id, form);
+        showToast(`${form.name} 정보가 저장되었습니다.`);
+      } else {
+        await createMember(form);
+        showToast(`${form.name} 단원이 추가되었습니다.`);
+      }
+      onSaved();
+    } catch (error) {
+      showToast(`저장 실패: ${error instanceof Error ? error.message : '오류 발생'}`);
+      console.error('저장 실패:', error);
     }
-    onSaved();
   };
 
   return (
