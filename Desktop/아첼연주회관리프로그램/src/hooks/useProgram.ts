@@ -8,6 +8,7 @@
 
 import { db } from '../db/database';
 import type { Concert, ProgramItem } from '../types';
+import { createRepertoire } from './useRepertoire';
 
 export type ProgramItemCreateInput = Omit<ProgramItem, 'id' | 'concertId' | 'order'> & {
   order?: number;
@@ -18,12 +19,26 @@ export type ProgramItemUpdateInput = Partial<Omit<ProgramItem, 'id' | 'concertId
 export async function getProgramItems(concertId: string): Promise<ProgramItem[]> {
   if (!concertId) return [];
   const list = await db.programItems.where('concertId').equals(concertId).toArray();
-  return list.sort((a, b) => a.order - b.order);
+
+  const enriched = await Promise.all(
+    list.map(async (item) => {
+      if (item.repertoireId) {
+        const rep = await db.repertoire.get(item.repertoireId);
+        if (rep) {
+          return { ...item, composer: rep.composer, title: rep.title, duration: rep.duration };
+        }
+      }
+      return item;
+    })
+  );
+
+  return enriched.sort((a, b) => a.order - b.order);
 }
 
 /**
  * 프로그램 아이템 추가. 같은 콘서트 내 (composer + title + movement) 중복 시
  * 'DUPLICATE_REPERTOIRE' 에러를 throw 한다.
+ * repertoireId가 없으면 마스터 repertoire에 먼저 추가한 후 ID를 가져온다.
  */
 export async function addProgramItem(
   concertId: string,
@@ -50,6 +65,18 @@ export async function addProgramItem(
 
   if (isDup) throw new Error('DUPLICATE_REPERTOIRE');
 
+  let repertoireId = data.repertoireId;
+
+  // repertoireId가 없으면 마스터 repertoire에 먼저 추가 (양방향 동기화)
+  if (!repertoireId && data.composer && data.title) {
+    repertoireId = await createRepertoire({
+      composer: data.composer,
+      title: data.title,
+      movement: data.movement,
+      duration: data.duration,
+    });
+  }
+
   const nextOrder =
     data.order ??
     (existing.length === 0
@@ -59,7 +86,7 @@ export async function addProgramItem(
   const item: ProgramItem = {
     id: crypto.randomUUID(),
     concertId,
-    repertoireId: data.repertoireId,
+    repertoireId,
     order: nextOrder,
     composer: data.composer,
     title: data.title,
@@ -78,7 +105,19 @@ export async function updateProgramItem(
   id: string,
   data: ProgramItemUpdateInput
 ): Promise<void> {
+  const item = await db.programItems.get(id);
   await db.programItems.update(id, data);
+
+  // write-through: 마스터 repertoire도 함께 업데이트
+  if (item?.repertoireId && (data.composer !== undefined || data.title !== undefined || data.duration !== undefined)) {
+    const masterFields: Record<string, any> = {};
+    if (data.composer !== undefined) masterFields.composer = data.composer;
+    if (data.title !== undefined) masterFields.title = data.title;
+    if (data.duration !== undefined) masterFields.duration = data.duration;
+    if (Object.keys(masterFields).length > 0) {
+      await db.repertoire.update(item.repertoireId, masterFields);
+    }
+  }
 }
 
 /**
@@ -115,11 +154,6 @@ export async function getConcertHistoryForPiece(
 
   return (results.filter(Boolean) as { programItem: ProgramItem; concert: Concert }[])
     .sort((a, b) => a.concert.date.localeCompare(b.concert.date));
-}
-
-export async function getTotalDuration(concertId: string): Promise<number> {
-  const items = await getProgramItems(concertId);
-  return items.reduce((sum, item) => sum + (item.duration ?? 0), 0);
 }
 
 /**

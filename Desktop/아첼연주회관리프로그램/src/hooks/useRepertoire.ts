@@ -44,6 +44,18 @@ export async function updateRepertoire(
   data: RepertoireUpdateInput
 ): Promise<void> {
   await db.repertoire.update(id, data);
+
+  // cascade: composer/title/duration 변경 시 관련 programItems도 업데이트
+  if (data.composer !== undefined || data.title !== undefined || data.duration !== undefined) {
+    const items = await db.programItems.where('repertoireId').equals(id).toArray();
+    if (items.length > 0) {
+      const cascadeFields: Record<string, any> = {};
+      if (data.composer !== undefined) cascadeFields.composer = data.composer;
+      if (data.title !== undefined) cascadeFields.title = data.title;
+      if (data.duration !== undefined) cascadeFields.duration = data.duration;
+      await Promise.all(items.map((item) => db.programItems.update(item.id, cascadeFields)));
+    }
+  }
 }
 
 /**

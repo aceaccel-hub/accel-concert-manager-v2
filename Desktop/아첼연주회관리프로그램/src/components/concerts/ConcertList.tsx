@@ -210,7 +210,7 @@ export default function ConcertList() {
       {/* 우측 상세 패널 */}
       <div className="flex-1 overflow-y-auto p-6">
         {selected ? (
-          <div className="max-w-2xl space-y-4">
+          <div className="space-y-4">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -254,12 +254,6 @@ export default function ConcertList() {
                 <p className="text-sm text-gray-800 whitespace-pre-line">{selected.note}</p>
               </div>
             )}
-
-            <div className="text-center pt-4">
-              <button onClick={() => handleEnterDetail(selected)} className="btn-primary px-8 py-3 text-base">
-                이 연주회 통합 관리하기 →
-              </button>
-            </div>
           </div>
         ) : (
           <div className="h-full flex items-center justify-center text-gray-400">

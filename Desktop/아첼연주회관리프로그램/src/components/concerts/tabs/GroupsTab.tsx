@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Edit2 } from 'lucide-react';
 import type { Group, ConcertGroup, GroupRole } from '../../../types';
 import Modal from '../../common/Modal';
 import {
@@ -8,6 +8,7 @@ import {
   getConcertGroups,
   addGroupToConcert,
   removeGroupFromConcert,
+  updateGroup,
 } from '../../../hooks/useGroups';
 import type { ConcertTabContext } from '../ConcertDetail';
 
@@ -32,6 +33,7 @@ export default function GroupsTab() {
   const [allGroups, setAllGroups] = useState<Group[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ConcertGroupFull | null>(null);
+  const [editTarget, setEditTarget] = useState<ConcertGroupFull | null>(null);
 
   const load = async () => {
     const [cgs, all] = await Promise.all([getConcertGroups(concertId), getAllGroups()]);
@@ -80,12 +82,20 @@ export default function GroupsTab() {
                   <p className="text-xs text-blue-500 mt-1">{item.group.homepage}</p>
                 )}
               </div>
-              <button
-                onClick={() => setRemoveTarget(item)}
-                className="text-gray-400 hover:text-red-600 ml-4"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => setEditTarget(item)}
+                  className="text-gray-400 hover:text-blue-600"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={() => setRemoveTarget(item)}
+                  className="text-gray-400 hover:text-red-600"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -100,6 +110,17 @@ export default function GroupsTab() {
           onSaved={() => {
             load();
             setShowAdd(false);
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <GroupEditModal
+          group={editTarget.group}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            load();
+            setEditTarget(null);
           }}
         />
       )}
@@ -211,6 +232,117 @@ function AddGroupModal({
               <option key={r}>{r}</option>
             ))}
           </select>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function GroupEditModal({
+  group,
+  onClose,
+  onSaved,
+}: {
+  group: Group;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: group.name || '',
+    type: group.type || '',
+    phone: group.phone || '',
+    email: group.email || '',
+    representative: group.representative || '',
+    homepage: group.homepage || '',
+    businessNumber: group.businessNumber || '',
+  });
+
+  const handleSave = async () => {
+    try {
+      await updateGroup(group.id, form);
+      onSaved();
+    } catch (e: any) {
+      alert('저장 실패: ' + (e?.message ?? '오류'));
+    }
+  };
+
+  return (
+    <Modal
+      title="단체 정보 편집"
+      onClose={onClose}
+      size="sm"
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose}>
+            취소
+          </button>
+          <button className="btn-primary" onClick={handleSave}>
+            저장
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div>
+          <label className="label">단체명</label>
+          <input
+            className="input"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="label">유형</label>
+          <input
+            className="input"
+            value={form.type}
+            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+            placeholder="협회, 단체, 기관 등"
+          />
+        </div>
+        <div>
+          <label className="label">대표자</label>
+          <input
+            className="input"
+            value={form.representative}
+            onChange={(e) => setForm((f) => ({ ...f, representative: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="label">연락처</label>
+          <input
+            className="input"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            placeholder="010-0000-0000"
+          />
+        </div>
+        <div>
+          <label className="label">이메일</label>
+          <input
+            className="input"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            placeholder="example@email.com"
+          />
+        </div>
+        <div>
+          <label className="label">홈페이지</label>
+          <input
+            className="input"
+            value={form.homepage}
+            onChange={(e) => setForm((f) => ({ ...f, homepage: e.target.value }))}
+            placeholder="https://example.com"
+          />
+        </div>
+        <div>
+          <label className="label">사업자등록번호</label>
+          <input
+            className="input"
+            value={form.businessNumber}
+            onChange={(e) => setForm((f) => ({ ...f, businessNumber: e.target.value }))}
+            placeholder="123-45-67890"
+          />
         </div>
       </div>
     </Modal>
