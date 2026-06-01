@@ -25,6 +25,7 @@ import { GripVertical, Plus, Trash2, Edit2, History } from 'lucide-react';
 import type { Concert, ProgramItem, Repertoire, ScoreStatus } from '../../../types';
 import Modal from '../../common/Modal';
 import StatusBadge from '../../common/StatusBadge';
+import Combobox from '../../common/Combobox';
 import { showToast } from '../../common/Toast';
 import { getAllRepertoire } from '../../../hooks/useRepertoire';
 import {
@@ -558,19 +559,39 @@ function ProgramItemForm({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="label">작곡가 *</label>
-          <input className="input" value={form.composer} onChange={(e) => setForm((f) => ({ ...f, composer: e.target.value }))} />
+          <Combobox
+            category="composer"
+            value={form.composer}
+            onChange={(value) => setForm((f) => ({ ...f, composer: value }))}
+            defaultOptions={Array.from(new Set(repertoire.map((r) => r.composer)))}
+          />
         </div>
         <div>
           <label className="label">곡명 *</label>
-          <input className="input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+          <Combobox
+            category="title"
+            value={form.title}
+            onChange={(value) => setForm((f) => ({ ...f, title: value }))}
+            defaultOptions={Array.from(new Set(repertoire.map((r) => r.title)))}
+          />
         </div>
         <div>
           <label className="label">악장/부제</label>
-          <input className="input" value={form.movement} onChange={(e) => setForm((f) => ({ ...f, movement: e.target.value }))} />
+          <Combobox
+            category="movement"
+            value={form.movement}
+            onChange={(value) => setForm((f) => ({ ...f, movement: value }))}
+            defaultOptions={Array.from(new Set(repertoire.map((r) => r.arrangement).filter(Boolean)))}
+          />
         </div>
         <div>
           <label className="label">협연자</label>
-          <input className="input" value={form.soloist} onChange={(e) => setForm((f) => ({ ...f, soloist: e.target.value }))} />
+          <Combobox
+            category="soloist"
+            value={form.soloist}
+            onChange={(value) => setForm((f) => ({ ...f, soloist: value }))}
+            defaultOptions={[]}
+          />
         </div>
         <div>
           <label className="label">예상 시간 (분)</label>
