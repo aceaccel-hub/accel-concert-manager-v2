@@ -651,6 +651,13 @@ function AttendanceReportView({ rehearsals, concertId }: { rehearsals: Rehearsal
     return attendance.find((a) => a.memberId === memberId && a.rehearsalId === rehearsalId)?.status || '-';
   };
 
+  const getAttendanceRate = (memberId: string) => {
+    const total = sortedRehearsals.length;
+    if (total === 0) return 0;
+    const present = sortedRehearsals.filter((r) => getStatus(memberId, r.id) === '출석').length;
+    return Math.round((present / total) * 100);
+  };
+
   const sortedRehearsals = [...rehearsals].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
@@ -670,6 +677,9 @@ function AttendanceReportView({ rehearsals, concertId }: { rehearsals: Rehearsal
                 <div className="text-gray-400">{r.time}</div>
               </th>
             ))}
+            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-l border-gray-200 w-20">
+              출석률
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -697,6 +707,9 @@ function AttendanceReportView({ rehearsals, concertId }: { rehearsals: Rehearsal
                   </td>
                 );
               })}
+              <td className="px-3 py-2 text-center font-semibold text-gray-900 border-l border-gray-200 w-20">
+                {getAttendanceRate(m.memberId)}%
+              </td>
             </tr>
           ))}
         </tbody>
