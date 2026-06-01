@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Trash2, Edit2, Music, PlusCircle } from 'lucide-react';
 import type { Repertoire, Difficulty, ScoreStatus } from '../../types';
 import Modal from '../common/Modal';
+import Combobox from '../common/Combobox';
 import {
   getAllRepertoire,
   createRepertoire,
@@ -169,6 +170,7 @@ export default function RepertoirePage() {
       {(showForm || editItem) && (
         <RepertoireForm
           item={editItem}
+          allRepertoire={items}
           onClose={() => {
             setShowForm(false);
             setEditItem(null);
@@ -227,10 +229,12 @@ function RepertoireForm({
   item,
   onClose,
   onSaved,
+  allRepertoire,
 }: {
   item: Repertoire | null;
   onClose: () => void;
   onSaved: () => void;
+  allRepertoire: Repertoire[];
 }) {
   const [form, setForm] = useState({
     composer: '',
@@ -286,34 +290,38 @@ function RepertoireForm({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="label">작곡가 *</label>
-          <input
-            className="input"
+          <Combobox
+            category="composer"
             value={form.composer}
-            onChange={(e) => setForm((f) => ({ ...f, composer: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, composer: value }))}
+            defaultOptions={Array.from(new Set(allRepertoire.map((r) => r.composer)))}
           />
         </div>
         <div>
           <label className="label">곡명 *</label>
-          <input
-            className="input"
+          <Combobox
+            category="title"
             value={form.title}
-            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, title: value }))}
+            defaultOptions={Array.from(new Set(allRepertoire.map((r) => r.title)))}
           />
         </div>
         <div>
           <label className="label">편곡</label>
-          <input
-            className="input"
+          <Combobox
+            category="movement"
             value={form.arrangement}
-            onChange={(e) => setForm((f) => ({ ...f, arrangement: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, arrangement: value }))}
+            defaultOptions={Array.from(new Set(allRepertoire.map((r) => r.arrangement).filter(Boolean)))}
           />
         </div>
         <div>
           <label className="label">편성</label>
-          <input
-            className="input"
+          <Combobox
+            category="soloist"
             value={form.instrumentation}
-            onChange={(e) => setForm((f) => ({ ...f, instrumentation: e.target.value }))}
+            onChange={(value) => setForm((f) => ({ ...f, instrumentation: value }))}
+            defaultOptions={[]}
           />
         </div>
         <div>
