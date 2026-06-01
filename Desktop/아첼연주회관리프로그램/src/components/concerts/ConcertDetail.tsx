@@ -7,7 +7,6 @@ import StatusBadge from '../common/StatusBadge';
 import ConcertForm from './ConcertForm';
 import { getConcertById, updateConcert } from '../../hooks/useConcert';
 import { getConcertMembers } from '../../hooks/useMembers';
-import { getChecklists } from '../../hooks/useChecklists';
 import { getTotalDuration } from '../../hooks/useProgram';
 import { formatDuration } from '../../utils/calculations';
 
@@ -19,7 +18,6 @@ const TABS: { path: string; label: string }[] = [
   { path: 'rehearsals', label: '연습' },
   { path: 'budget', label: '예산' },
   { path: 'documents', label: '문서' },
-  { path: 'checklist', label: '체크리스트' },
   { path: 'memo', label: '메모' },
 ];
 
@@ -38,9 +36,8 @@ export default function ConcertDetail() {
     setLoading(true);
     const c = await getConcertById(concertId);
     if (c) {
-      const [members, checks, duration] = await Promise.all([
+      const [members, duration] = await Promise.all([
         getConcertMembers(concertId),
-        getChecklists(concertId),
         getTotalDuration(concertId),
       ]);
       if (duration !== c.expectedDuration) {
@@ -48,9 +45,6 @@ export default function ConcertDetail() {
         await updateConcert(concertId, { expectedDuration: duration });
       }
       setMemberCount(members.filter((m) => !m.isReserve).length);
-      setCheckRate(
-        checks.length > 0 ? Math.round((checks.filter((cc) => cc.isDone).length / checks.length) * 100) : 0
-      );
     }
     setConcert(c ?? null);
     setLoading(false);

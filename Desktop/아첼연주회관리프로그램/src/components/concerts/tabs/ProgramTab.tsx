@@ -401,6 +401,9 @@ function ProgramItemForm({
   const [repertoire, setRepertoire] = useState<Repertoire[]>([]);
   const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [repId, setRepId] = useState('');
+  const [showRepPicker, setShowRepPicker] = useState(false);
+  const [repHistory, setRepHistory] = useState<Array<{ year: string; title: string }>>([]);
+  const [allRepHistories, setAllRepHistories] = useState<Record<string, Array<{ year: string; title: string }>>>({});
   const [form, setForm] = useState({
     composer: '',
     title: '',
@@ -428,10 +431,29 @@ function ProgramItemForm({
     }
   }, [item]);
 
-  const handleSelectRep = (id: string) => {
+  useEffect(() => {
+    if (showRepPicker && repertoire.length > 0) {
+      const loadHistories = async () => {
+        const histories: Record<string, Array<{ year: string; title: string }>> = {};
+        for (const rep of repertoire) {
+          const hist = await getConcertHistoryForPiece(rep.composer, rep.title);
+          histories[rep.id] = hist.map((h) => ({ year: h.concert.date.split('-')[0], title: h.concert.title }));
+        }
+        setAllRepHistories(histories);
+      };
+      loadHistories();
+    }
+  }, [showRepPicker, repertoire]);
+
+  const handleSelectRep = async (id: string) => {
     setRepId(id);
     const rep = repertoire.find((r) => r.id === id);
-    if (rep) setForm((f) => ({ ...f, composer: rep.composer, title: rep.title, duration: rep.duration ?? 0 }));
+    if (rep) {
+      setForm((f) => ({ ...f, composer: rep.composer, title: rep.title, duration: rep.duration ?? 0 }));
+      const hist = await getConcertHistoryForPiece(rep.composer, rep.title);
+      setRepHistory(hist.map((h) => ({ year: h.concert.date.split('-')[0], title: h.concert.title })));
+      setShowRepPicker(false);
+    }
   };
 
   const handleSave = async () => {
@@ -484,15 +506,54 @@ function ProgramItemForm({
         </div>
       )}
       {mode === 'existing' && !item && (
-        <div className="mb-4">
-          <label className="label">곡목 선택</label>
-          <select className="input" value={repId} onChange={(e) => handleSelectRep(e.target.value)}>
-            <option value="">선택하세요</option>
-            {repertoire.map((r) => (
-              <option key={r.id} value={r.id}>{r.composer} - {r.title}</option>
-            ))}
-          </select>
+        <div className="mb-4 space-y-3">
+          <div>
+            <label className="label">곡목 선택</label>
+            <button
+              onClick={() => setShowRepPicker(true)}
+              className="w-full btn-secondary text-left"
+            >
+              {repId ? repertoire.find((r) => r.id === repId)?.composer + ' - ' + repertoire.find((r) => r.id === repId)?.title : '곡목을 선택하세요'}
+            </button>
+          </div>
+          {repHistory.length > 0 && (
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <p className="text-xs font-medium text-gray-600 mb-2">📍 사용 이력</p>
+              <div className="space-y-1">
+                {repHistory.map((h, i) => (
+                  <p key={i} className="text-xs text-gray-700">
+                    {h.year}년 {h.title}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {showRepPicker && (
+        <Modal
+          title="곡목 선택"
+          onClose={() => setShowRepPicker(false)}
+          size="sm"
+        >
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {repertoire.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => handleSelectRep(r.id)}
+                className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+              >
+                <p className="font-medium text-sm text-gray-900">{r.composer} - {r.title}</p>
+                {allRepHistories[r.id] && allRepHistories[r.id].length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {allRepHistories[r.id].map((h) => `${h.year}년 ${h.title}`).join(', ')}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        </Modal>
       )}
       <div className="grid grid-cols-2 gap-4">
         <div>
