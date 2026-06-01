@@ -14,6 +14,7 @@ import { getRehearsals } from '../../../hooks/useRehearsals';
 import { getBudgets } from '../../../hooks/useBudget';
 import { getConcertGroups } from '../../../hooks/useGroups';
 import { getChecklists } from '../../../hooks/useChecklists';
+import { getMasterItemValues } from '../../../hooks/useMasterItems';
 import Modal from '../../common/Modal';
 import type { ConcertTabContext } from '../ConcertDetail';
 
@@ -800,6 +801,34 @@ interface BuilderProps {
   onPreviewChange?: (preview: string) => void;
 }
 
+const DEFAULT_INSTRUMENTS = [
+  '바이올린',
+  '비올라',
+  '첼로',
+  '콘트라베이스',
+  '플루트',
+  '피콜로',
+  '오보에',
+  '잉글리시 호른',
+  '클라리넷',
+  '베이스 클라리넷',
+  '바순',
+  '콘트라바순',
+  '호른',
+  '트럼펫',
+  '트롬본',
+  '베이스 트롬본',
+  '튜바',
+  '팀파니',
+  '타악기',
+  '하프',
+  '피아노',
+  '오르간',
+  '성악',
+  '합창',
+  '기타',
+];
+
 // 단원모집공고문 빌더
 function RecruitmentNoticeBuilder({
   concert,
@@ -809,14 +838,21 @@ function RecruitmentNoticeBuilder({
   const [guestMembers, setGuestMembers] = useState<Member[]>([]);
   const [instruments, setInstruments] = useState<string[]>([]);
   const [showPastGuests, setShowPastGuests] = useState(false);
+  const [noticeText, setNoticeText] = useState('');
 
   useEffect(() => {
     const load = async () => {
       const allMembers = await getAllMembers();
       const guests = allMembers.filter((m) => m.role === '객원');
-      const uniqueInstruments = [...new Set(allMembers.map((m) => m.instrument))].sort();
+      let instrumentList = await getMasterItemValues('instrument');
+
+      // 마스터 아이템이 비어있으면 기본 악기 목록 사용
+      if (instrumentList.length === 0) {
+        instrumentList = DEFAULT_INSTRUMENTS;
+      }
+
       setGuestMembers(guests);
-      setInstruments(uniqueInstruments);
+      setInstruments(instrumentList);
     };
     load();
   }, []);
@@ -826,7 +862,7 @@ function RecruitmentNoticeBuilder({
       ? needList.map((n) => `  - ${n.instrument}: ${n.count}명`).join('\n')
       : '(필요 인원 미지정)';
 
-    const preview = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【 단원 모집 공고 】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -842,12 +878,12 @@ ${needText}
 
 관심 있으신 분은 아래로 연락 주세요.
 감사합니다.`;
-
-    onPreviewChange?.(preview);
   };
 
   useEffect(() => {
-    generatePreview();
+    const preview = generatePreview();
+    setNoticeText(preview);
+    onPreviewChange?.(preview);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needList, concert]);
 
@@ -903,6 +939,19 @@ ${needText}
         >
           <Plus size={14} /> 인원 추가
         </button>
+      </div>
+
+      <div className="border-t pt-4">
+        <h3 className="font-semibold text-gray-900 mb-3">공고문 편집</h3>
+        <textarea
+          value={noticeText}
+          onChange={(e) => {
+            setNoticeText(e.target.value);
+            onPreviewChange?.(e.target.value);
+          }}
+          className="input w-full h-64 font-mono text-sm"
+          placeholder="공고문 내용을 편집하세요"
+        />
       </div>
 
       <div className="border-t pt-4">
