@@ -22,6 +22,7 @@ import type {
   ConcertDocument,
   Checklist,
   Memo,
+  MasterItem,
   BackupBundle,
 } from '../types';
 
@@ -39,6 +40,7 @@ class AccelDB extends Dexie {
   documents!: Table<ConcertDocument, string>;
   checklists!: Table<Checklist, string>;
   memos!: Table<Memo, string>;
+  masterItems!: Table<MasterItem, string>;
 
   constructor() {
     super('AccelConcertManager');
@@ -58,6 +60,24 @@ class AccelDB extends Dexie {
       documents: 'id, concertId, type',
       checklists: 'id, concertId, order',
       memos: 'id, concertId',
+    });
+
+    this.version(2).stores({
+      concerts: 'id, status, groupId, date',
+      repertoire: 'id, composer, title',
+      programItems: 'id, concertId, order, repertoireId',
+      members: 'id, name, instrument, status',
+      concertMembers: 'id, concertId, memberId, [concertId+memberId]',
+      groups: 'id, name, status',
+      concertGroups: 'id, concertId, groupId, [concertId+groupId]',
+      rehearsals: 'id, concertId, date',
+      rehearsalAttendance:
+        'id, rehearsalId, concertId, memberId, [rehearsalId+memberId]',
+      budgets: 'id, concertId, type',
+      documents: 'id, concertId, type',
+      checklists: 'id, concertId, order',
+      memos: 'id, concertId',
+      masterItems: 'id, category, value',
     });
   }
 }
