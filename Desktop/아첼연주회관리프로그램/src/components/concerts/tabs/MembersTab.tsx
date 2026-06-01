@@ -154,6 +154,7 @@ function EditableRow({
           placeholder="연락처"
         />
       </td>
+      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.residentNumber || '-'}</td>
       <td className="px-4 py-2 text-center text-sm text-gray-500">
         {cm.attendanceRate != null ? `${cm.attendanceRate}%` : '-'}
       </td>
@@ -165,6 +166,8 @@ function EditableRow({
           onChange={(e) => setFee(+e.target.value)}
         />
       </td>
+      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.bankName || '-'}</td>
+      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.bankAccount || '-'}</td>
       <td className="px-4 py-2 text-center">
         <button
           onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onSaved)}
@@ -231,12 +234,15 @@ function ReadonlyRow({
       </td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.role || cm.member?.role || '-'}</td>
       <td className="px-4 py-3 text-gray-500 text-xs">{cm.member?.phone || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.residentNumber || '-'}</td>
       <td className="px-4 py-3 text-center text-gray-600 text-sm">
         {cm.attendanceRate != null ? `${cm.attendanceRate}%` : '-'}
       </td>
       <td className="px-4 py-3 text-right text-gray-700 text-sm">
         {cm.fee ? `${cm.fee.toLocaleString()}원` : '-'}
       </td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.bankName || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.bankAccount || '-'}</td>
       <td className="px-4 py-3 text-center">
         <button
           onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onReload)}
@@ -381,8 +387,11 @@ export default function MembersTab() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">파트</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">역할</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">연락처</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">주민등록번호</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">출석률</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">사례비</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">은행명</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">계좌번호</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">예비</th>
                 <th className="w-28 px-3 py-3" />
               </tr>
