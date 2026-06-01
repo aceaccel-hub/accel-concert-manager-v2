@@ -191,6 +191,8 @@ function RehearsalCard({
           {r.targetPieces && r.targetPieces.length > 0 && (
             <p className="text-xs text-gray-500 mt-1">대상곡: {r.targetPieces.join(', ')}</p>
           )}
+          {r.dressCode && <p className="text-xs text-gray-500 mt-1">복장: {r.dressCode}</p>}
+          {r.equipmentMemo && <p className="text-xs text-gray-500 mt-1">준비물: {r.equipmentMemo}</p>}
           {r.memo && <p className="text-xs text-gray-400 mt-1 italic">{r.memo}</p>}
           {r.progressRate != null && (
             <div className="mt-2 flex items-center gap-2">
@@ -239,6 +241,8 @@ function RehearsalForm({
     targetPieces: '',
     progressRate: 0,
     memo: '',
+    dressCode: '',
+    equipmentMemo: '',
     conductorEvaluation: '' as Evaluation | '',
     nextTask: '',
   });
@@ -253,6 +257,8 @@ function RehearsalForm({
         targetPieces: (item.targetPieces ?? []).join(', '),
         progressRate: item.progressRate ?? 0,
         memo: item.memo ?? '',
+        dressCode: item.dressCode ?? '',
+        equipmentMemo: item.equipmentMemo ?? '',
         conductorEvaluation: (item.conductorEvaluation ?? '') as Evaluation | '',
         nextTask: item.nextTask ?? '',
       });
@@ -274,6 +280,8 @@ function RehearsalForm({
         : [],
       progressRate: form.progressRate,
       memo: form.memo,
+      dressCode: form.dressCode,
+      equipmentMemo: form.equipmentMemo,
       conductorEvaluation: (form.conductorEvaluation || undefined) as Evaluation | undefined,
       nextTask: form.nextTask,
     };
@@ -381,6 +389,24 @@ function RehearsalForm({
             className="input"
             value={form.nextTask}
             onChange={(e) => setForm((f) => ({ ...f, nextTask: e.target.value }))}
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="label">복장 (드레스 코드)</label>
+          <input
+            className="input"
+            value={form.dressCode}
+            onChange={(e) => setForm((f) => ({ ...f, dressCode: e.target.value }))}
+            placeholder="정장 필수, 검은색 상의 등"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="label">지참 준비물</label>
+          <input
+            className="input"
+            value={form.equipmentMemo}
+            onChange={(e) => setForm((f) => ({ ...f, equipmentMemo: e.target.value }))}
+            placeholder="악기, 악보, 메트로놈 등"
           />
         </div>
         <div className="col-span-2">

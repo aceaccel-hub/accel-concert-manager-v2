@@ -13,7 +13,6 @@ import {
 import { db } from '../../db/database';
 import { useStore } from '../../store/store';
 import { getAllConcerts } from '../../hooks/useConcert';
-import { maskBankAccount, maskResidentNumber } from '../../utils/calculations';
 
 const PARTS = ['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Bass', '관악기', '타악기', '기타'];
 
@@ -169,23 +168,16 @@ export default function MembersPage() {
                 ['등급', selected.grade || '-'],
                 ['연락처', selected.phone || '-'],
                 ['이메일', selected.email || '-'],
+                ['국적', selected.nationality || '-'],
+                ['신분증 유형', selected.idNumberType || '-'],
+                ['신분증 번호', selected.residentNumber || '-'],
                 ['상태', selected.status],
                 ['기본 사례비', selected.baseFee ? `${selected.baseFee.toLocaleString()}원` : '-'],
                 ['가입일', selected.joinDate || '-'],
-                [
-                  '주민번호',
-                  settings.maskResidentNumber
-                    ? maskResidentNumber(selected.residentNumber)
-                    : selected.residentNumber || '-',
-                ],
-                [
-                  '계좌번호',
-                  `${selected.bankName ? selected.bankName + ' ' : ''}${
-                    settings.maskBankAccount
-                      ? maskBankAccount(selected.bankAccount)
-                      : selected.bankAccount || '-'
-                  }`,
-                ],
+                ['은행', selected.bankName || '-'],
+                ['계좌번호', selected.bankAccount || '-'],
+                ['예금주명', selected.accountHolder || '-'],
+                ['예금주 관계', selected.accountHolderRelation || '-'],
               ].map(([l, v]) => (
                 <div key={l}>
                   <p className="text-xs text-gray-500">{l}</p>
@@ -276,9 +268,13 @@ function MemberForm({
     role: '일반단원' as MemberRole,
     phone: '',
     email: '',
+    nationality: '',
+    idNumberType: '' as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
     residentNumber: '',
     bankName: '',
     bankAccount: '',
+    accountHolder: '',
+    accountHolderRelation: '',
     baseFee: 0,
     grade: '정단원' as MemberGrade,
     status: '활동중' as MemberStatus,
@@ -295,9 +291,13 @@ function MemberForm({
         role: item.role,
         phone: item.phone ?? '',
         email: item.email ?? '',
+        nationality: item.nationality ?? '',
+        idNumberType: (item.idNumberType ?? '') as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
         residentNumber: item.residentNumber ?? '',
         bankName: item.bankName ?? '',
         bankAccount: item.bankAccount ?? '',
+        accountHolder: item.accountHolder ?? '',
+        accountHolderRelation: item.accountHolderRelation ?? '',
         baseFee: item.baseFee ?? 0,
         grade: (item.grade ?? '정단원') as MemberGrade,
         status: item.status,
@@ -392,7 +392,34 @@ function MemberForm({
           />
         </div>
         <div>
-          <label className="label">주민번호</label>
+          <label className="label">국적</label>
+          <input
+            className="input"
+            value={form.nationality}
+            onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))}
+            placeholder="대한민국"
+          />
+        </div>
+        <div>
+          <label className="label">신분증 유형</label>
+          <select
+            className="input"
+            value={form.idNumberType}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                idNumberType: e.target.value as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
+              }))
+            }
+          >
+            <option value="">선택 안 함</option>
+            <option value="주민등록번호">주민등록번호</option>
+            <option value="외국인등록번호">외국인등록번호</option>
+            <option value="여권번호">여권번호</option>
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="label">신분증 번호</label>
           <input
             className="input"
             value={form.residentNumber}
@@ -423,6 +450,23 @@ function MemberForm({
             className="input"
             value={form.bankAccount}
             onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="label">예금주명 (본인 이외)</label>
+          <input
+            className="input"
+            value={form.accountHolder}
+            onChange={(e) => setForm((f) => ({ ...f, accountHolder: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="label">예금주와의 관계</label>
+          <input
+            className="input"
+            value={form.accountHolderRelation}
+            onChange={(e) => setForm((f) => ({ ...f, accountHolderRelation: e.target.value }))}
+            placeholder="배우자, 부모, 자녀 등"
           />
         </div>
         <div>

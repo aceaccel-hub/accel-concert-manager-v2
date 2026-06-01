@@ -117,6 +117,11 @@ export async function getConcertHistoryForPiece(
     .sort((a, b) => a.concert.date.localeCompare(b.concert.date));
 }
 
+export async function getTotalDuration(concertId: string): Promise<number> {
+  const items = await getProgramItems(concertId);
+  return items.reduce((sum, item) => sum + (item.duration ?? 0), 0);
+}
+
 /**
  * 해당 콘서트의 전체 연주 시간(분) 합계.
  */

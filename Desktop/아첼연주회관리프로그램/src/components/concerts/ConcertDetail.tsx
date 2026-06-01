@@ -5,9 +5,10 @@ import { useStore } from '../../store/store';
 import type { Concert } from '../../types';
 import StatusBadge from '../common/StatusBadge';
 import ConcertForm from './ConcertForm';
-import { getConcertById } from '../../hooks/useConcert';
+import { getConcertById, updateConcert } from '../../hooks/useConcert';
 import { getConcertMembers } from '../../hooks/useMembers';
 import { getChecklists } from '../../hooks/useChecklists';
+import { getTotalDuration } from '../../hooks/useProgram';
 import { formatDuration } from '../../utils/calculations';
 
 const TABS: { path: string; label: string }[] = [
@@ -36,17 +37,22 @@ export default function ConcertDetail() {
     if (!concertId) return;
     setLoading(true);
     const c = await getConcertById(concertId);
-    setConcert(c ?? null);
     if (c) {
-      const [members, checks] = await Promise.all([
+      const [members, checks, duration] = await Promise.all([
         getConcertMembers(concertId),
         getChecklists(concertId),
+        getTotalDuration(concertId),
       ]);
+      if (duration !== c.expectedDuration) {
+        c.expectedDuration = duration;
+        await updateConcert(concertId, { expectedDuration: duration });
+      }
       setMemberCount(members.filter((m) => !m.isReserve).length);
       setCheckRate(
         checks.length > 0 ? Math.round((checks.filter((cc) => cc.isDone).length / checks.length) * 100) : 0
       );
     }
+    setConcert(c ?? null);
     setLoading(false);
   };
 

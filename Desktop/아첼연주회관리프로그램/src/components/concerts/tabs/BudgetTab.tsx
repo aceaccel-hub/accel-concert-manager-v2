@@ -17,7 +17,7 @@ import StatusBadge from '../../common/StatusBadge';
 
 interface Props { concertId: string; }
 
-type TabName = 'summary' | 'income' | 'expense' | 'payroll' | 'settlement';
+type TabName = 'summary' | 'income' | 'expense' | 'withholding';
 
 export default function BudgetTab({ concertId }: Props) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -88,11 +88,10 @@ export default function BudgetTab({ concertId }: Props) {
       {/* 탭 네비게이션 */}
       <div className="flex gap-2 border-b border-gray-200">
         {[
-          { id: 'summary' as TabName, label: '예산 요약' },
-          { id: 'income' as TabName, label: '수입 관리' },
-          { id: 'expense' as TabName, label: '지출 관리' },
-          { id: 'payroll' as TabName, label: '사례비/정산' },
-          { id: 'settlement' as TabName, label: '최종 정산 출력' },
+          { id: 'summary' as TabName, label: '전체보기' },
+          { id: 'income' as TabName, label: '수입내역' },
+          { id: 'expense' as TabName, label: '지출내역' },
+          { id: 'withholding' as TabName, label: '원천징수내역' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -205,53 +204,11 @@ export default function BudgetTab({ concertId }: Props) {
         </div>
       )}
 
-      {/* 섹션 4: 사례비/정산 관리 */}
-      {activeTab === 'payroll' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-gray-900">단원 사례비 정산</h3>
-              <button
-                onClick={() => setShowUnpaidOnly(!showUnpaidOnly)}
-                className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${
-                  showUnpaidOnly
-                    ? 'bg-amber-50 text-amber-700 border-amber-300'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <Filter size={12} /> 미지급자만
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center gap-1"
-                onClick={() => downloadPayrollCSV(concertMembers, members)}
-              >
-                <Download size={12} /> CSV 다운로드
-              </button>
-              <button
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center gap-1"
-                onClick={() => window.print()}
-              >
-                <Download size={12} /> 인쇄
-              </button>
-            </div>
-          </div>
-
-          <PayrollTable
-            concertMembers={showUnpaidOnly ? concertMembers.filter(cm => !cm.feePaid) : concertMembers}
-            members={members}
-            onSave={handleSaveConcertMember}
-          />
-        </div>
-      )}
-
-      {/* 섹션 5: 최종 정산 출력 */}
-      {activeTab === 'settlement' && (
-        <SettlementView
+      {/* 섹션 4: 원천징수 내역 */}
+      {activeTab === 'withholding' && (
+        <WithholdingTable
           concertMembers={concertMembers}
           members={members}
-          budgets={budgets}
         />
       )}
 
@@ -680,4 +637,55 @@ function downloadPayrollCSV(concertMembers: ConcertMember[], members: Member[]) 
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+function WithholdingTable({
+  concertMembers,
+  members,
+}: {
+  concertMembers: ConcertMember[];
+  members: Member[];
+}) {
+  const WITHHOLDING_RATE = 0.033;
+
+  if (concertMembers.length === 0) {
+    return <div className="card p-12 text-center text-gray-400 text-sm">단원이 없습니다.</div>;
+  }
+
+  return (
+    <div className="card overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">이름</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">역할</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">지급액</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">원천징수세액 (3.3%)</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">실지급액</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {concertMembers.map(cm => {
+            const member = members.find(m => m.id === cm.memberId);
+            const baseFee = cm.fee ?? member?.baseFee ?? 0;
+            const extra = cm.feeExtra ?? 0;
+            const deduction = cm.feeDeduction ?? 0;
+            const paymentAmount = baseFee + extra - deduction;
+            const withholding = Math.round(paymentAmount * WITHHOLDING_RATE);
+            const actual = paymentAmount - withholding;
+
+            return (
+              <tr key={cm.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium text-gray-900">{member?.name || '-'}</td>
+                <td className="px-4 py-3 text-gray-600">{cm.role || '-'}</td>
+                <td className="px-4 py-3 text-right text-gray-700">{paymentAmount.toLocaleString()}원</td>
+                <td className="px-4 py-3 text-right text-red-600 font-medium">{withholding.toLocaleString()}원</td>
+                <td className="px-4 py-3 text-right font-semibold text-gray-900">{actual.toLocaleString()}원</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
