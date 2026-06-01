@@ -126,7 +126,7 @@ function SortableRow({
 
 // ---------- 메인 탭 ----------
 export default function ProgramTab() {
-  const { concert } = useOutletContext<ConcertTabContext>();
+  const { concert, reload: reloadConcert } = useOutletContext<ConcertTabContext>();
   const concertId = concert.id;
 
   const [items, setItems] = useState<ProgramItem[]>([]);
@@ -174,6 +174,7 @@ export default function ProgramTab() {
     await removeProgramItem(removeTarget.id);
     setRemoveTarget(null);
     load();
+    reloadConcert();
   };
 
   const handleOpenHistory = async (item: ProgramItem) => {
@@ -259,6 +260,7 @@ export default function ProgramTab() {
           }}
           onSaved={() => {
             load();
+            reloadConcert();
             setShowAdd(false);
             setEditItem(null);
           }}
@@ -413,8 +415,11 @@ function ProgramItemForm({
     soloist: '',
     scoreStatus: '준비중' as ScoreStatus,
     partScoreStatus: '준비중' as ScoreStatus,
+    partScoreDetail: {} as Record<string, { status: ScoreStatus; assignee?: string }>,
     note: '',
   });
+
+  const PARTS = ['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass'];
 
   useEffect(() => {
     getAllRepertoire().then(setRepertoire);
@@ -427,6 +432,7 @@ function ProgramItemForm({
         soloist: item.soloist ?? '',
         scoreStatus: item.scoreStatus,
         partScoreStatus: item.partScoreStatus,
+        partScoreDetail: item.partScoreDetail ?? {},
         note: item.note ?? '',
       });
     }
@@ -609,6 +615,46 @@ function ProgramItemForm({
           <select className="input" value={form.partScoreStatus} onChange={(e) => setForm((f) => ({ ...f, partScoreStatus: e.target.value as ScoreStatus }))}>
             {SCORE_STATUSES.map((s) => <option key={s}>{s}</option>)}
           </select>
+        </div>
+        <div className="col-span-2">
+          <label className="label">파트별 악보 정보</label>
+          <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            {PARTS.map((part) => (
+              <div key={part} className="grid grid-cols-3 gap-2 items-end">
+                <div>
+                  <label className="text-xs text-gray-600">{part}</label>
+                </div>
+                <div>
+                  <select
+                    className="input text-xs py-1.5"
+                    value={form.partScoreDetail[part]?.status ?? '준비중'}
+                    onChange={(e) => setForm((f) => ({
+                      ...f,
+                      partScoreDetail: {
+                        ...f.partScoreDetail,
+                        [part]: { ...f.partScoreDetail[part], status: e.target.value as ScoreStatus }
+                      }
+                    }))}
+                  >
+                    {SCORE_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  className="input text-xs py-1.5"
+                  placeholder="담당자"
+                  value={form.partScoreDetail[part]?.assignee ?? ''}
+                  onChange={(e) => setForm((f) => ({
+                    ...f,
+                    partScoreDetail: {
+                      ...f.partScoreDetail,
+                      [part]: { ...f.partScoreDetail[part], assignee: e.target.value }
+                    }
+                  }))}
+                />
+              </div>
+            ))}
+          </div>
         </div>
         <div className="col-span-2">
           <label className="label">비고</label>
