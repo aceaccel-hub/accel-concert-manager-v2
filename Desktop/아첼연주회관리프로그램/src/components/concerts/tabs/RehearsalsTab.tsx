@@ -34,6 +34,7 @@ export default function RehearsalsTab() {
   const [editItem, setEditItem] = useState<Rehearsal | null>(null);
   const [attendanceTarget, setAttendanceTarget] = useState<Rehearsal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Rehearsal | null>(null);
+  const [view, setView] = useState<'일정' | '달력' | '출석기록부'>('일정');
 
   const load = async () => {
     setRehearsals(await getRehearsals(concertId));
@@ -57,56 +58,86 @@ export default function RehearsalsTab() {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-gray-900">연습 일정</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            예정 {upcoming.length}회 · 완료 {past.length}회
-          </p>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex gap-2 border-b border-gray-200">
+          {(['일정', '달력', '출석기록부'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                view === v
+                  ? 'text-blue-600 border-b-blue-600'
+                  : 'text-gray-500 border-b-transparent hover:text-gray-700'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
         </div>
         <button className="btn-primary" onClick={() => setShowAdd(true)}>
           <Plus size={16} /> 연습 추가
         </button>
       </div>
 
-      {rehearsals.length === 0 ? (
-        <div className="card p-12 text-center text-gray-400">등록된 연습 일정이 없습니다.</div>
-      ) : (
-        <div className="space-y-3">
-          {upcoming.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">예정된 연습</p>
-              <div className="space-y-2">
-                {upcoming.map((r) => (
-                  <RehearsalCard
-                    key={r.id}
-                    r={r}
-                    onEdit={setEditItem}
-                    onDelete={setDeleteTarget}
-                    onAttendance={setAttendanceTarget}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {past.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">완료된 연습</p>
-              <div className="space-y-2 opacity-70">
-                {past.map((r) => (
-                  <RehearsalCard
-                    key={r.id}
-                    r={r}
-                    onEdit={setEditItem}
-                    onDelete={setDeleteTarget}
-                    onAttendance={setAttendanceTarget}
-                  />
-                ))}
-              </div>
+      {view === '일정' && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">
+              예정 {upcoming.length}회 · 완료 {past.length}회
+            </p>
+          </div>
+
+          {rehearsals.length === 0 ? (
+            <div className="card p-12 text-center text-gray-400">등록된 연습 일정이 없습니다.</div>
+          ) : (
+            <div className="space-y-3">
+              {upcoming.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-2">예정된 연습</p>
+                  <div className="space-y-2">
+                    {upcoming.map((r) => (
+                      <RehearsalCard
+                        key={r.id}
+                        r={r}
+                        onEdit={setEditItem}
+                        onDelete={setDeleteTarget}
+                        onAttendance={setAttendanceTarget}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {past.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-2">완료된 연습</p>
+                  <div className="space-y-2 opacity-70">
+                    {past.map((r) => (
+                      <RehearsalCard
+                        key={r.id}
+                        r={r}
+                        onEdit={setEditItem}
+                        onDelete={setDeleteTarget}
+                        onAttendance={setAttendanceTarget}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
+
+      {view === '달력' && (
+        <CalendarView
+          rehearsals={rehearsals}
+          onEdit={setEditItem}
+          onDelete={setDeleteTarget}
+          onAttendance={setAttendanceTarget}
+        />
+      )}
+
+      {view === '출석기록부' && <AttendanceReportView rehearsals={rehearsals} concertId={concertId} />}
 
       {(showAdd || editItem) && (
         <RehearsalForm
@@ -517,5 +548,159 @@ function AttendanceModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+function CalendarView({
+  rehearsals,
+  onEdit,
+  onDelete,
+  onAttendance,
+}: {
+  rehearsals: Rehearsal[];
+  onEdit: (r: Rehearsal) => void;
+  onDelete: (r: Rehearsal) => void;
+  onAttendance: (r: Rehearsal) => void;
+}) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startingDayOfWeek = firstDay.getDay();
+
+  const monthRehearsals = rehearsals.filter((r) => {
+    const d = new Date(r.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+
+  const days: (number | null)[] = Array(startingDayOfWeek).fill(null);
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => setCurrentDate(new Date(year, month - 1))}>←</button>
+        <h3 className="font-semibold text-gray-900">
+          {year}년 {month + 1}월
+        </h3>
+        <button onClick={() => setCurrentDate(new Date(year, month + 1))}>→</button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {['일', '월', '화', '수', '목', '금', '토'].map((d) => (
+          <div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">
+            {d}
+          </div>
+        ))}
+        {days.map((day, idx) => {
+          const dateStr = day ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
+          const dayRehearsals = monthRehearsals.filter((r) => r.date === dateStr);
+
+          return (
+            <div
+              key={idx}
+              className={`min-h-20 p-1 rounded-lg border ${
+                day ? 'bg-white border-gray-200' : 'bg-gray-50 border-transparent'
+              }`}
+            >
+              {day && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-gray-700">{day}</p>
+                  {dayRehearsals.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => onEdit(r)}
+                      className="block w-full text-left text-xs p-0.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 truncate"
+                    >
+                      {r.time} {r.type}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AttendanceReportView({ rehearsals, concertId }: { rehearsals: Rehearsal[]; concertId: string }) {
+  const [members, setMembers] = useState<(ConcertMember & { member: Member })[]>([]);
+  const [attendance, setAttendance] = useState<RehearsalAttendance[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const [m, ...atts] = await Promise.all([
+        getConcertMembers(concertId),
+        ...rehearsals.map((r) => getAttendance(r.id)),
+      ]);
+      setMembers(m);
+      setAttendance(atts.flat());
+    };
+    load();
+  }, [rehearsals, concertId]);
+
+  const getStatus = (memberId: string, rehearsalId: string) => {
+    return attendance.find((a) => a.memberId === memberId && a.rehearsalId === rehearsalId)?.status || '-';
+  };
+
+  const sortedRehearsals = [...rehearsals].sort((a, b) => a.date.localeCompare(b.date));
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 sticky left-0 bg-gray-50 w-32">
+              단원명
+            </th>
+            {sortedRehearsals.map((r) => (
+              <th
+                key={r.id}
+                className="px-2 py-2 text-center text-xs font-medium text-gray-500 whitespace-nowrap border-l border-gray-200"
+              >
+                <div>{r.date.split('-')[2]}</div>
+                <div className="text-gray-400">{r.time}</div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((m) => (
+            <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <td className="px-3 py-2 text-sm font-medium text-gray-900 sticky left-0 bg-white">
+                {m.member?.name}
+              </td>
+              {sortedRehearsals.map((r) => {
+                const status = getStatus(m.memberId, r.id);
+                const color =
+                  status === '출석'
+                    ? 'bg-green-50 text-green-700'
+                    : status === '결석'
+                      ? 'bg-red-50 text-red-700'
+                      : status === '지각'
+                        ? 'bg-yellow-50 text-yellow-700'
+                        : status === '조퇴'
+                          ? 'bg-orange-50 text-orange-700'
+                          : 'bg-gray-50 text-gray-400';
+
+                return (
+                  <td key={r.id} className="px-2 py-2 text-center border-l border-gray-200">
+                    <span className={`inline-block px-2 py-1 text-xs rounded ${color}`}>{status}</span>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
