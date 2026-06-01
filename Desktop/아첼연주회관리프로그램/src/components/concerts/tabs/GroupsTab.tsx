@@ -73,10 +73,11 @@ export default function GroupsTab() {
                   <span className={`badge ${roleColors[item.role]}`}>{item.role}</span>
                   <span className="text-sm font-semibold text-gray-900">{item.group?.name}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-xs text-gray-500 mt-2">
+                <div className="grid grid-cols-4 gap-3 text-xs text-gray-500 mt-2">
                   <span>유형: {item.group?.type || '-'}</span>
                   <span>대표: {item.group?.representative || '-'}</span>
                   <span>연락처: {item.group?.phone || '-'}</span>
+                  <span>사업자: {item.group?.businessNumber || '-'}</span>
                 </div>
                 {item.group?.homepage && (
                   <p className="text-xs text-blue-500 mt-1">{item.group.homepage}</p>
