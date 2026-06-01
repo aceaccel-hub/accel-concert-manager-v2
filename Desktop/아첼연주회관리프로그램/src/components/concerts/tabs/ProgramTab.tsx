@@ -601,9 +601,22 @@ function ProgramItemForm({
         </div>
         <div>
           <label className="label">예상 시간 (분)</label>
-          <input type="number" className="input" value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: +e.target.value }))} />
+          <Combobox
+            category="duration"
+            value={String(form.duration)}
+            onChange={(value) => setForm((f) => ({ ...f, duration: +value || 0 }))}
+            defaultOptions={Array.from(new Set(repertoire.map((r) => r.duration).filter(Boolean).map(String)))}
+          />
         </div>
-        <div />
+        <div>
+          <label className="label">담당자</label>
+          <Combobox
+            category="conductor"
+            value={form.soloist}
+            onChange={(value) => setForm((f) => ({ ...f, soloist: value }))}
+            defaultOptions={Array.from(new Set(repertoire.map((r) => r.instrumentation).filter(Boolean)))}
+          />
+        </div>
         <div>
           <label className="label">악보 준비 상태</label>
           <select className="input" value={form.scoreStatus} onChange={(e) => setForm((f) => ({ ...f, scoreStatus: e.target.value as ScoreStatus }))}>
