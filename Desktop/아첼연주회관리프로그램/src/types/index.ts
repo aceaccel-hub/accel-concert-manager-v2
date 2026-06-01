@@ -41,7 +41,7 @@ export type MemberGrade = '정단원' | '준단원' | '객원';
 export type MemberStatus = '활동중' | '휴식중' | '탈퇴';
 export type GroupStatus = '운영중' | '휴식중' | '해산';
 export type Evaluation = '상' | '중' | '하';
-export type MasterItemCategory = 'instrument' | 'part' | 'role' | 'composer' | 'title' | 'movement' | 'soloist';
+export type MasterItemCategory = 'instrument' | 'part' | 'role' | 'composer' | 'title' | 'movement' | 'soloist' | 'conductor';
 
 // ---------- Master Entities ----------
 
