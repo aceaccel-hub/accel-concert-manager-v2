@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Concert, Group, ConcertStatus } from '../../types';
 import Modal from '../common/Modal';
 import { getAllGroups } from '../../hooks/useGroups';
-import { createConcert, updateConcert } from '../../hooks/useConcert';
+import { createConcert, updateConcert, getAllConcerts, copyConcertData } from '../../hooks/useConcert';
 
 interface Props {
   concert?: Concert | null;
@@ -14,6 +14,8 @@ const STATUSES: ConcertStatus[] = ['기획중', '준비중', '진행중', '완�
 
 export default function ConcertForm({ concert, onClose, onSaved }: Props) {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [allConcerts, setAllConcerts] = useState<Concert[]>([]);
+  const [templateId, setTemplateId] = useState('');
   const [form, setForm] = useState({
     title: '',
     date: '',
@@ -30,6 +32,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
 
   useEffect(() => {
     getAllGroups().then(setGroups);
+    getAllConcerts().then(setAllConcerts);
     if (concert) {
       setForm({
         title: concert.title,
@@ -49,6 +52,23 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  const handleImport = () => {
+    const src = allConcerts.find((c) => c.id === templateId);
+    if (!src) return;
+    setForm((f) => ({
+      ...f,
+      title: src.title,
+      time: src.time,
+      place: src.place,
+      conductor: src.conductor,
+      coPerformer: src.coPerformer ?? '',
+      manager: src.manager ?? '',
+      groupId: src.groupId ?? '',
+      expectedDuration: src.expectedDuration ?? 120,
+      note: src.note ?? '',
+    }));
+  };
 
   const handleSave = async () => {
     if (!form.title || !form.date || !form.place) {
@@ -73,6 +93,9 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
       onSaved(concert.id);
     } else {
       const id = await createConcert(payload);
+      if (templateId) {
+        await copyConcertData(templateId, id);
+      }
       onSaved(id);
     }
   };
@@ -94,6 +117,28 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
       }
     >
       <div className="grid grid-cols-2 gap-4">
+        {!concert && (
+          <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm font-medium text-blue-900 mb-2">기존 연주회 가져오기 (선택사항)</p>
+            <div className="flex gap-2">
+              <select
+                className="input flex-1"
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+              >
+                <option value="">-- 선택 안 함 --</option>
+                {allConcerts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title} ({c.date})
+                  </option>
+                ))}
+              </select>
+              <button className="btn-secondary whitespace-nowrap" onClick={handleImport}>
+                가져오기
+              </button>
+            </div>
+          </div>
+        )}
         <div className="col-span-2">
           <label className="label">연주회명 *</label>
           <input

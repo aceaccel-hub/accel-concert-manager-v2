@@ -90,3 +90,83 @@ export async function updateConcert(
 export async function deleteConcert(id: string): Promise<void> {
   await deleteConcertCascade(id);
 }
+
+/**
+ * 기존 콘서트의 하위 데이터를 새 콘서트로 복사.
+ * 복사 대상: 곡목, 단원, 단체, 연습, 예산, 문서, 메모
+ * 미복사: 출석기록(rehearsalAttendance), 체크리스트(createConcert에서 기본 생성)
+ */
+export async function copyConcertData(
+  sourceId: string,
+  targetId: string
+): Promise<void> {
+  await db.transaction(
+    'rw',
+    db.programItems,
+    db.concertMembers,
+    db.concertGroups,
+    db.rehearsals,
+    db.budgets,
+    db.documents,
+    db.memos,
+    async () => {
+      const newId = () => crypto.randomUUID();
+
+      const programs = await db.programItems
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.programItems.bulkAdd(
+        programs.map((p) => ({ ...p, id: newId(), concertId: targetId }))
+      );
+
+      const members = await db.concertMembers
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.concertMembers.bulkAdd(
+        members.map((m) => ({ ...m, id: newId(), concertId: targetId }))
+      );
+
+      const groups = await db.concertGroups
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.concertGroups.bulkAdd(
+        groups.map((g) => ({ ...g, id: newId(), concertId: targetId }))
+      );
+
+      const rehearsals = await db.rehearsals
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.rehearsals.bulkAdd(
+        rehearsals.map((r) => ({ ...r, id: newId(), concertId: targetId }))
+      );
+
+      const budgets = await db.budgets
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.budgets.bulkAdd(
+        budgets.map((b) => ({ ...b, id: newId(), concertId: targetId }))
+      );
+
+      const docs = await db.documents
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.documents.bulkAdd(
+        docs.map((d) => ({ ...d, id: newId(), concertId: targetId }))
+      );
+
+      const memos = await db.memos
+        .where('concertId')
+        .equals(sourceId)
+        .toArray();
+      await db.memos.bulkAdd(
+        memos.map((m) => ({ ...m, id: newId(), concertId: targetId }))
+      );
+    }
+  );
+}
