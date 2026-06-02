@@ -60,6 +60,7 @@ export interface Concert {
   status: ConcertStatus;
   groupId?: string;
   expectedDuration?: number; // 분 단위
+  intermissionDuration?: number; // 인터미션 시간 (분 단위)
   progressRate: number; // 0~100, 체크리스트 진행률로 자동 갱신
   note?: string;
   createdAt: string;
@@ -90,6 +91,8 @@ export interface Member {
   residentNumber?: string;
   idNumberType?: '주민등록번호' | '외국인등록번호' | '여권번호';
   nationality?: string;
+  address?: string; // 홈택스 신고용 주소
+  incomeType?: '사업소득' | '기타소득'; // 원천징수 소득 구분
   bankAccount?: string;
   bankName?: string;
   accountHolder?: string; // 예금주명 (본인 이외 타인 명의인 경우)

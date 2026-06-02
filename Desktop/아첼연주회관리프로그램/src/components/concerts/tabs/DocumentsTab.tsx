@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { FileText, Clipboard, Eye, Plus, Trash2, FileSpreadsheet, FileDown, X, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { ConcertDocument, DocumentType, Member, Concert } from '../../../types';
+import { calcWithholding, maskResidentNumber } from '../../../utils/calculations';
 import {
   getDocuments,
   createDocument,
@@ -29,6 +30,7 @@ const DOC_TYPES: { type: DocumentType; icon: string; desc: string }[] = [
   { type: '단원모집공고문', icon: '📣', desc: 'Guest 단원 모집 공고' },
   { type: '기획서', icon: '📋', desc: '연주회 기획서' },
   { type: '견적서', icon: '🧾', desc: '견적 주문서' },
+  { type: '원천징수영수증', icon: '🏛️', desc: '국세청 신고용 원천징수영수증' },
 ];
 
 export default function DocumentsTab() {
@@ -50,7 +52,7 @@ export default function DocumentsTab() {
     loadSaved();
     handlePreview('곡목표');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [concertId]);
+  }, [concertId, concert]);
 
   // ---------- Raw data fetch (shared by all export functions) ----------
   const fetchAllData = async () => {
@@ -93,7 +95,7 @@ ${concert.title}
               }${p.soloist ? `\n   협연: ${p.soloist}` : ''}\n   예상 시간: ${p.duration ?? '-'}분`
           )
           .join('\n\n') +
-        `\n\n총 ${programs.length}곡 · 예상 ${totalDur}분`
+        `\n\n총 ${programs.length}곡 · 예상 ${totalDur}분${concert.intermissionDuration ? ` (인터미션 ${concert.intermissionDuration}분 포함)` : ''}`
       );
     }
 
@@ -155,6 +157,7 @@ ${concert.title}
     }
 
     if (type === '프로그램북원고') {
+      const totalDur = programs.reduce((s, p) => s + (p.duration ?? 0), 0);
       return (
         header +
         `【 프로그램북 원고 】\n\n` +
@@ -168,7 +171,8 @@ ${concert.title}
                 p.soloist ? `\n\n협연: ${p.soloist}` : ''
               }`
           )
-          .join('\n\n')
+          .join('\n\n') +
+        `\n\n─── 공연 시간 ───\n예상 ${totalDur}분${concert.intermissionDuration ? ` + 인터미션 ${concert.intermissionDuration}분` : ''}`
       );
     }
 
@@ -237,7 +241,7 @@ ${concert.title}
             p.order, p.composer, p.title, p.movement || '-', p.soloist || '-',
             p.duration ? `${p.duration}분` : '-', p.scoreStatus, p.partScoreStatus,
           ])
-        ) + `<p class="summary">총 ${programs.length}곡 · 예상 ${totalDur}분</p>`;
+        ) + `<p class="summary">총 ${programs.length}곡 · 예상 ${totalDur}분${concert.intermissionDuration ? ` (인터미션 ${concert.intermissionDuration}분 포함)` : ''}</p>`;
     } else if (selectedType === '단원명단') {
       const members = cms.filter((m) => !m.isReserve);
       bodyHtml =
@@ -363,7 +367,7 @@ ${concert.title}
           p.duration ?? '', p.scoreStatus, p.partScoreStatus,
         ]),
         [],
-        [`총 ${programs.length}곡`, '', '', '', '', `예상 ${totalDur}분`],
+        [`총 ${programs.length}곡`, '', '', '', '', `예상 ${totalDur}분${concert.intermissionDuration ? ` (인터미션 ${concert.intermissionDuration}분)` : ''}`],
       ];
     } else if (selectedType === '단원명단') {
       const members = cms.filter((m) => !m.isReserve);
@@ -743,6 +747,8 @@ ${concert.title}
             <ConcertPlanBuilder concert={concert} concertId={concertId} />
           ) : selectedType === '견적서' ? (
             <EstimateBuilder concertId={concertId} />
+          ) : selectedType === '원천징수영수증' ? (
+            <WithholdingReceiptBuilder concert={concert} concertId={concertId} />
           ) : preview ? (
             <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
               {preview}
@@ -1048,6 +1054,9 @@ function ConcertPlanBuilder({ concert, concertId }: { concert: Concert; concertI
                 <td className="px-2 py-1 text-center">{p.duration || '-'}분</td>
               </tr>
             ))}
+            <tr className="border-t bg-gray-50 font-semibold">
+              <td colSpan={4} className="px-2 py-1 text-center">예상 공연 시간: {data.programs.reduce((s, p) => s + (p.duration ?? 0), 0)}분{concert.intermissionDuration ? ` + 인터미션 ${concert.intermissionDuration}분` : ''}</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -1245,6 +1254,135 @@ function EstimateBuilder({ concertId }: { concertId: string }) {
 
       <button
         onClick={() => window.print()}
+        className="btn-secondary w-full"
+      >
+        <FileDown size={14} /> 인쇄
+      </button>
+    </div>
+  );
+}
+
+// 원천징수영수증 빌더
+function WithholdingReceiptBuilder({ concert, concertId }: { concert: Concert; concertId: string }) {
+  const [cms, setCms] = useState<any[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const [concertMembers, allMembers] = await Promise.all([
+        getConcertMembers(concertId),
+        getAllMembers(),
+      ]);
+      setCms(concertMembers);
+      setMembers(allMembers);
+    };
+    load();
+  }, [concertId]);
+
+  const getReceiptHTML = () => {
+    const receipts = cms
+      .map((cm) => {
+        const member = members.find((m) => m.id === cm.memberId);
+        if (!member) return '';
+
+        const baseFee = cm.fee ?? member.baseFee ?? 0;
+        const extra = cm.feeExtra ?? 0;
+        const deduction = cm.feeDeduction ?? 0;
+        const paymentAmount = baseFee + extra - deduction;
+        const incomeType = member.incomeType ?? '사업소득';
+        const wh = calcWithholding(paymentAmount, incomeType as '사업소득' | '기타소득');
+
+        return `
+        <div style="page-break-after: always; padding: 40px; border: 1px solid #999; margin: 20px 0; font-family: 'Noto Sans KR', serif;">
+          <h3 style="text-align: center; margin-bottom: 30px; font-size: 16px; font-weight: bold;">
+            거주자의 ${incomeType === '사업소득' ? '사업소득' : '기타소득'} 원천징수영수증
+          </h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px; width: 30%;"><strong>소득자명</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${member.name}</td>
+              <td style="border: 1px solid #ccc; padding: 8px; width: 30%;"><strong>주민등록번호</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${maskResidentNumber(member.residentNumber)}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>소득구분</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${incomeType}</td>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>주소</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${member.address || '-'}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지급처</strong></td>
+              <td colspan="3" style="border: 1px solid #ccc; padding: 8px;">${concert.title}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지급일</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${concert.date}</td>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지급기간</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${concert.date}</td>
+            </tr>
+          </table>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr style="background-color: #f0f0f0;">
+              <td style="border: 1px solid #ccc; padding: 8px; width: 50%;"><strong>지급총액</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${paymentAmount.toLocaleString()}원</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>소득세</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.incomeTax.toLocaleString()}원</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지방소득세</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.localTax.toLocaleString()}원</td>
+            </tr>
+            <tr style="background-color: #e8f4f8; font-weight: bold;">
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>원천징수액 합계</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.total.toLocaleString()}원</td>
+            </tr>
+            <tr style="background-color: #f9f9f9; font-weight: bold; font-size: 15px;">
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>차인실수령액</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.net.toLocaleString()}원</td>
+            </tr>
+          </table>
+
+          <div style="margin-top: 30px; font-size: 12px; color: #666;">
+            <p>본 원천징수영수증은 국세청 홈택스 신고용 공식 문서입니다.</p>
+            <p style="margin-top: 5px;">발급일: ${new Date().toISOString().split('T')[0]}</p>
+          </div>
+        </div>
+        `;
+      })
+      .join('');
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+      <style>
+        body { margin: 0; padding: 20px; font-family: 'Noto Sans KR', serif; }
+      </style>
+    </head>
+    <body>
+      ${receipts}
+    </body>
+    </html>
+    `;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 p-4 rounded border border-blue-200 text-sm text-blue-900">
+        {cms.length}명의 단원에 대한 원천징수영수증을 생성합니다.
+      </div>
+      <button
+        onClick={() => {
+          const w = window.open();
+          w!.document.write(getReceiptHTML());
+          w!.document.close();
+          setTimeout(() => w!.print(), 250);
+        }}
         className="btn-secondary w-full"
       >
         <FileDown size={14} /> 인쇄

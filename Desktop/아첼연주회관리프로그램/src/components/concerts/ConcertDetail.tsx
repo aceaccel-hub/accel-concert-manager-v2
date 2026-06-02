@@ -106,7 +106,7 @@ export default function ConcertDetail() {
               {concert.expectedDuration ? (
                 <span className="flex items-center gap-1.5">
                   <Clock size={14} />
-                  {formatDuration(concert.expectedDuration)} 예정
+                  {formatDuration(concert.expectedDuration)} 예정{concert.intermissionDuration ? ` + 인터미션 ${concert.intermissionDuration}분` : ''}
                 </span>
               ) : null}
             </div>

@@ -27,6 +27,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
     status: '준비중' as ConcertStatus,
     groupId: '',
     expectedDuration: 120,
+    intermissionDuration: 0,
     note: '',
   });
 
@@ -45,6 +46,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
         status: concert.status,
         groupId: concert.groupId ?? '',
         expectedDuration: concert.expectedDuration ?? 120,
+        intermissionDuration: concert.intermissionDuration ?? 0,
         note: concert.note ?? '',
       });
     }
@@ -86,6 +88,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
       status: form.status,
       groupId: form.groupId || undefined,
       expectedDuration: form.expectedDuration,
+      intermissionDuration: form.intermissionDuration,
       note: form.note || undefined,
     };
     if (concert) {
@@ -211,6 +214,15 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
             className="input"
             value={form.expectedDuration}
             onChange={(e) => set('expectedDuration', +e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">인터미션 시간 (분)</label>
+          <input
+            type="number"
+            className="input"
+            value={form.intermissionDuration}
+            onChange={(e) => set('intermissionDuration', +e.target.value)}
           />
         </div>
         <div className="col-span-2">
