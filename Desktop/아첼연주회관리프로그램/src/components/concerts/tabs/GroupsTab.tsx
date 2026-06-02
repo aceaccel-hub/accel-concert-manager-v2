@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
-import type { Group, ConcertGroup, GroupRole } from '../../../types';
+import type { Group, ConcertGroup, GroupRole, GroupStatus } from '../../../types';
 import Modal from '../../common/Modal';
+import Combobox from '../../common/Combobox';
 import {
   getAllGroups,
   getConcertGroups,
   addGroupToConcert,
   removeGroupFromConcert,
   updateGroup,
+  createGroup,
 } from '../../../hooks/useGroups';
 import type { ConcertTabContext } from '../ConcertDetail';
 
@@ -166,10 +168,37 @@ function AddGroupModal({
   onSaved: () => void;
 }) {
   const available = allGroups.filter((g) => !existing.includes(g.id));
+  const [tab, setTab] = useState<'existing' | 'new'>('existing');
+
+  // 기존 단체 연결 탭 state
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [role, setRole] = useState<GroupRole>('주최');
 
-  const handleSave = async () => {
+  // 새 단체 만들기 탭 state
+  const [newForm, setNewForm] = useState({
+    name: '',
+    type: '',
+    representative: '',
+    manager: '',
+    phone: '',
+    email: '',
+    homepage: '',
+    address: '',
+    businessNumber: '',
+    regularSchedule: '',
+    status: '운영중' as GroupStatus,
+    note: '',
+  });
+  const [newRole, setNewRole] = useState<GroupRole>('주최');
+
+  const getDefaultOptions = (field: string) => {
+    const values = allGroups
+      .map((g: any) => g[field])
+      .filter((v: any) => v && typeof v === 'string');
+    return [...new Set(values)];
+  };
+
+  const handleSaveExisting = async () => {
     if (!selectedGroupId) {
       alert('단체를 선택해 주세요.');
       return;
@@ -186,54 +215,242 @@ function AddGroupModal({
     }
   };
 
+  const handleSaveNew = async () => {
+    if (!newForm.name.trim()) {
+      alert('단체명을 입력해 주세요.');
+      return;
+    }
+    try {
+      const newGroupId = await createGroup(newForm);
+      await addGroupToConcert(concertId, newGroupId, newRole);
+      onSaved();
+    } catch (e: any) {
+      alert('저장 실패: ' + (e?.message ?? '오류'));
+    }
+  };
+
   return (
     <Modal
-      title="단체 연결"
+      title="단체 추가"
       onClose={onClose}
-      size="sm"
+      size={tab === 'new' ? 'lg' : 'sm'}
       footer={
         <>
           <button className="btn-secondary" onClick={onClose}>
             취소
           </button>
-          <button className="btn-primary" onClick={handleSave}>
+          <button
+            className="btn-primary"
+            onClick={tab === 'existing' ? handleSaveExisting : handleSaveNew}
+          >
             추가
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label className="label">단체 선택</label>
-          {available.length === 0 ? (
-            <p className="text-sm text-gray-500">추가할 수 있는 단체가 없습니다.</p>
-          ) : (
-            <select
-              className="input"
-              value={selectedGroupId}
-              onChange={(e) => setSelectedGroupId(e.target.value)}
-            >
-              <option value="">선택하세요</option>
-              {available.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div>
-          <label className="label">역할</label>
-          <select
-            className="input"
-            value={role}
-            onChange={(e) => setRole(e.target.value as GroupRole)}
+        {/* 탭 */}
+        <div className="flex gap-2 border-b">
+          <button
+            onClick={() => setTab('existing')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'existing'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
           >
-            {ROLES.map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
+            기존 단체 연결
+          </button>
+          <button
+            onClick={() => setTab('new')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'new'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            새 단체 만들기
+          </button>
         </div>
+
+        {/* 기존 단체 연결 탭 */}
+        {tab === 'existing' && (
+          <div className="space-y-4">
+            <div>
+              <label className="label">단체 선택</label>
+              {available.length === 0 ? (
+                <p className="text-sm text-gray-500">추가할 수 있는 단체가 없습니다.</p>
+              ) : (
+                <select
+                  className="input"
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                >
+                  <option value="">선택하세요</option>
+                  {available.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div>
+              <label className="label">역할</label>
+              <select
+                className="input"
+                value={role}
+                onChange={(e) => setRole(e.target.value as GroupRole)}
+              >
+                {ROLES.map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* 새 단체 만들기 탭 */}
+        {tab === 'new' && (
+          <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">
+                  단체명 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="input"
+                  value={newForm.name}
+                  onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="단체명 입력"
+                />
+              </div>
+              <div>
+                <label className="label">유형</label>
+                <Combobox
+                  category="groupType"
+                  value={newForm.type}
+                  onChange={(val) => setNewForm((f) => ({ ...f, type: val }))}
+                  defaultOptions={getDefaultOptions('type')}
+                />
+              </div>
+
+              <div>
+                <label className="label">대표자</label>
+                <Combobox
+                  category="representative"
+                  value={newForm.representative}
+                  onChange={(val) => setNewForm((f) => ({ ...f, representative: val }))}
+                  defaultOptions={getDefaultOptions('representative')}
+                />
+              </div>
+              <div>
+                <label className="label">담당자</label>
+                <Combobox
+                  category="groupManager"
+                  value={newForm.manager}
+                  onChange={(val) => setNewForm((f) => ({ ...f, manager: val }))}
+                  defaultOptions={getDefaultOptions('manager')}
+                />
+              </div>
+
+              <div>
+                <label className="label">연락처</label>
+                <input
+                  className="input"
+                  value={newForm.phone}
+                  onChange={(e) => setNewForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <div>
+                <label className="label">이메일</label>
+                <input
+                  className="input"
+                  value={newForm.email}
+                  onChange={(e) => setNewForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="example@email.com"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="label">홈페이지</label>
+                <input
+                  className="input"
+                  value={newForm.homepage}
+                  onChange={(e) => setNewForm((f) => ({ ...f, homepage: e.target.value }))}
+                  placeholder="https://example.com"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="label">주소</label>
+                <input
+                  className="input"
+                  value={newForm.address}
+                  onChange={(e) => setNewForm((f) => ({ ...f, address: e.target.value }))}
+                  placeholder="주소 입력"
+                />
+              </div>
+
+              <div>
+                <label className="label">사업자등록번호</label>
+                <Combobox
+                  category="businessNumber"
+                  value={newForm.businessNumber}
+                  onChange={(val) => setNewForm((f) => ({ ...f, businessNumber: val }))}
+                  defaultOptions={getDefaultOptions('businessNumber')}
+                />
+              </div>
+              <div>
+                <label className="label">정기 연습</label>
+                <Combobox
+                  category="regularSchedule"
+                  value={newForm.regularSchedule}
+                  onChange={(val) => setNewForm((f) => ({ ...f, regularSchedule: val }))}
+                  defaultOptions={getDefaultOptions('regularSchedule')}
+                />
+              </div>
+
+              <div>
+                <label className="label">상태</label>
+                <select
+                  className="input"
+                  value={newForm.status}
+                  onChange={(e) =>
+                    setNewForm((f) => ({ ...f, status: e.target.value as GroupStatus }))
+                  }
+                >
+                  <option value="운영중">운영중</option>
+                  <option value="휴식중">휴식중</option>
+                  <option value="해산">해산</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">역할</label>
+                <select
+                  className="input"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as GroupRole)}
+                >
+                  {ROLES.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-span-2">
+                <label className="label">비고</label>
+                <textarea
+                  className="input h-16 resize-none"
+                  value={newForm.note}
+                  onChange={(e) => setNewForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="추가 사항 입력"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
