@@ -1,0 +1,25 @@
+# Directories
+한국가톨릭문화원
+아첼 청소년 오케스트라
+_workspace
+.omc
+
+# Documentation files
+*.docx
+*.doc
+*.md
+Vercel*
+
+# Images
+*.png
+*.jpg
+*.jpeg
+
+# Zips
+*.zip
+
+# Old dist
+dist\ 2
+
+# OS files
+.DS_Store
