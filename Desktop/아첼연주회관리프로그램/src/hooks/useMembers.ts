@@ -86,6 +86,7 @@ export async function addMemberToConcert(
     .first();
   if (existing) throw new Error('ALREADY_IN_CONCERT');
 
+  const member = await db.members.get(memberId);
   const row: ConcertMember = {
     id: crypto.randomUUID(),
     concertId,
@@ -99,15 +100,55 @@ export async function addMemberToConcert(
     note: data.note,
   };
   await db.concertMembers.add(row);
+
+  // 자동으로 단원페이 지출 항목 생성
+  const memberFee = (data.fee && data.fee > 0) ? data.fee : (member?.baseFee ?? 0);
+  console.log('Adding member fee:', { name: member?.name, fee: memberFee, baseFee: member?.baseFee, dataFee: data.fee });
+  if (memberFee > 0 && member?.name) {
+    try {
+      await db.budgets.add({
+        id: crypto.randomUUID(),
+        concertId,
+        type: '지출',
+        category: '단원페이',
+        title: `${member.name} 사례비`,
+        plannedAmount: memberFee,
+        paidAmount: 0,
+        paymentStatus: '예정',
+        createdAt: new Date().toISOString(),
+      });
+      console.log(`Budget created for ${member.name}: ${memberFee}원`);
+    } catch (error) {
+      console.error('Failed to create budget for member:', error);
+    }
+  } else {
+    console.log('Skipped budget creation: fee too low or member missing', { memberFee, memberName: member?.name });
+  }
 }
 
 /**
  * 콘서트에서 단원을 빼낸다.
  * members 마스터 DB 는 절대 삭제하지 않는다.
+ * 해당 단원의 사례비 지출 항목도 함께 삭제한다.
  */
 export async function removeMemberFromConcert(
   concertMemberId: string
 ): Promise<void> {
+  const cm = await db.concertMembers.get(concertMemberId);
+  if (cm) {
+    const member = await db.members.get(cm.memberId);
+    // 해당 단원의 사례비 지출 항목 삭제
+    if (member?.name) {
+      const budgets = await db.budgets
+        .where('concertId')
+        .equals(cm.concertId)
+        .filter(b => b.title === `${member.name} 사례비` && b.category === '단원페이')
+        .toArray();
+      for (const b of budgets) {
+        await db.budgets.delete(b.id);
+      }
+    }
+  }
   await db.concertMembers.delete(concertMemberId);
 }
 

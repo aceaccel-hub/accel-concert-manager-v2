@@ -77,3 +77,16 @@ export function calcProgressRate(done: number, total: number): number {
   const pct = (done / total) * 100;
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
+
+// ---------- Withholding Tax ----------
+
+/**
+ * 원천징수액을 계산한다.
+ * 사업소득: 3%
+ * 기타소득: 3%
+ */
+export function calcWithholding(amount: number, incomeType: '사업소득' | '기타소득'): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  const rate = 0.03; // 3% 기본 세율
+  return Math.round(amount * rate);
+}

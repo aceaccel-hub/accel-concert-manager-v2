@@ -44,6 +44,7 @@ export async function addProgramItem(
   concertId: string,
   data: ProgramItemCreateInput
 ): Promise<void> {
+  console.log('addProgramItem: input =', { concertId, data });
   if (!concertId) throw new Error('CONCERT_ID_REQUIRED');
 
   const existing = await db.programItems
@@ -69,12 +70,14 @@ export async function addProgramItem(
 
   // repertoireId가 없으면 마스터 repertoire에 먼저 추가 (양방향 동기화)
   if (!repertoireId && data.composer && data.title) {
+    console.log('addProgramItem: creating new repertoire');
     repertoireId = await createRepertoire({
       composer: data.composer,
       title: data.title,
       movement: data.movement,
       duration: data.duration,
     });
+    console.log('addProgramItem: created repertoireId =', repertoireId);
   }
 
   const nextOrder =
@@ -98,7 +101,9 @@ export async function addProgramItem(
     note: data.note,
   };
 
+  console.log('addProgramItem: item to save =', item);
   await db.programItems.add(item);
+  console.log('addProgramItem: saved successfully');
 }
 
 export async function updateProgramItem(

@@ -1,5 +1,6 @@
 import SmartInput from '../../common/SmartInput';
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign, GripVertical, Download, Check, Filter } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -15,11 +16,14 @@ import type { Budget, ConcertMember, Member } from '../../../types';
 import Modal from '../../common/Modal';
 import StatusBadge from '../../common/StatusBadge';
 
-interface Props { concertId: string; }
-
 type TabName = 'summary' | 'income' | 'expense' | 'withholding';
 
-export default function BudgetTab({ concertId }: Props) {
+export default function BudgetTab() {
+  const { concertId } = useParams<{ concertId: string }>();
+
+  if (!concertId) {
+    return <div className="p-6 text-center text-gray-400">연주회 정보를 불러올 수 없습니다.</div>;
+  }
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [concertMembers, setConcertMembers] = useState<ConcertMember[]>([]);
@@ -64,8 +68,17 @@ export default function BudgetTab({ concertId }: Props) {
     const overIdx = budgets.findIndex(b => b.id === over.id);
     const moved = arrayMove(budgets, activeIdx, overIdx);
 
-    await Promise.all(moved.map((b, i) => db.budgets.put({ ...b, order: i + 1 })));
-    load();
+    try {
+      const { order: _, ...rest } = moved[0];
+      await Promise.all(moved.map((b) => {
+        const { order: _o, ...data } = b;
+        return db.budgets.put(data);
+      }));
+      load();
+    } catch (error) {
+      console.error('Drag end error:', error);
+      load();
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -157,6 +170,44 @@ export default function BudgetTab({ concertId }: Props) {
               </div>
             </div>
           </div>
+
+          {/* 수입내역 */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">수입내역</h3>
+            {income.length > 0 ? (
+              <BudgetTable
+                items={income}
+                activeId={activeId}
+                isDragging={activeId !== null}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onEdit={(item) => { setEditItem(item); setShowAdd(true); }}
+                onDelete={handleDelete}
+                sensors={sensors}
+              />
+            ) : (
+              <div className="card p-8 text-center text-gray-400 text-sm">수입 항목이 없습니다.</div>
+            )}
+          </div>
+
+          {/* 지출내역 */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">지출내역</h3>
+            {expense.length > 0 ? (
+              <BudgetTable
+                items={expense}
+                activeId={activeId}
+                isDragging={activeId !== null}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onEdit={(item) => { setEditItem(item); setShowAdd(true); }}
+                onDelete={handleDelete}
+                sensors={sensors}
+              />
+            ) : (
+              <div className="card p-8 text-center text-gray-400 text-sm">지출 항목이 없습니다.</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -169,16 +220,20 @@ export default function BudgetTab({ concertId }: Props) {
               <Plus size={14} /> 항목 추가
             </button>
           </div>
-          <BudgetTable
-            items={income}
-            activeId={activeId}
-            isDragging={activeId !== null}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onEdit={(item) => { setEditItem(item); setShowAdd(true); }}
-            onDelete={handleDelete}
-            sensors={sensors}
-          />
+          {income.length > 0 ? (
+            <BudgetTable
+              items={income}
+              activeId={activeId}
+              isDragging={activeId !== null}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onEdit={(item) => { setEditItem(item); setShowAdd(true); }}
+              onDelete={handleDelete}
+              sensors={sensors}
+            />
+          ) : (
+            <div className="card p-12 text-center text-gray-400 text-sm">수입 항목이 없습니다.</div>
+          )}
         </div>
       )}
 
@@ -191,16 +246,20 @@ export default function BudgetTab({ concertId }: Props) {
               <Plus size={14} /> 항목 추가
             </button>
           </div>
-          <BudgetTable
-            items={expense}
-            activeId={activeId}
-            isDragging={activeId !== null}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onEdit={(item) => { setEditItem(item); setShowAdd(true); }}
-            onDelete={handleDelete}
-            sensors={sensors}
-          />
+          {expense.length > 0 ? (
+            <BudgetTable
+              items={expense}
+              activeId={activeId}
+              isDragging={activeId !== null}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onEdit={(item) => { setEditItem(item); setShowAdd(true); }}
+              onDelete={handleDelete}
+              sensors={sensors}
+            />
+          ) : (
+            <div className="card p-12 text-center text-gray-400 text-sm">지출 항목이 없습니다.</div>
+          )}
         </div>
       )}
 
@@ -524,7 +583,7 @@ function BudgetForm({
   onSaved: () => void;
 }) {
   const incomeCategories = ['티켓판매', '후원금', '지원금', '참가비', '기타수입'];
-  const expenseCategories = ['대관료', '지휘자사례비', '협연자사례비', '단원사례비', '악보비', '홍보비', '인쇄비', '식비', '기타지출'];
+  const expenseCategories = ['대관료', '지휘자사례비', '협연자사례비', '단원페이', '악보비', '홍보비', '인쇄비', '식비', '기타지출'];
   const [form, setForm] = useState({
     type: (item?.type || defaultType) as Budget['type'],
     category: item?.category || '',
@@ -539,21 +598,38 @@ function BudgetForm({
   const categories = form.type === '수입' ? incomeCategories : expenseCategories;
 
   const handleSave = async () => {
-    if (!form.title || !form.category) {
-      alert('카테고리와 항목명을 입력해 주세요.');
-      return;
+    try {
+      if (!form.title || !form.category) {
+        toast.error('카테고리와 항목명을 입력해 주세요.');
+        return;
+      }
+      console.log('Budget save attempt:', { concertId, form });
+      const data: Budget = {
+        id: item?.id || crypto.randomUUID(),
+        concertId,
+        ...form,
+        createdAt: item?.createdAt || new Date().toISOString(),
+      };
+      console.log('Budget data to save:', data);
+      if (item) {
+        console.log('Updating existing budget:', item.id);
+        await db.budgets.put(data);
+        toast.success('예산 항목이 수정되었습니다.');
+      } else {
+        console.log('Adding new budget');
+        await db.budgets.add(data);
+        toast.success('예산 항목이 추가되었습니다.');
+      }
+      console.log('Budget saved successfully');
+      onSaved();
+    } catch (error) {
+      console.error('Budget save error:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      toast.error(`저장 중 오류: ${error instanceof Error ? error.message : String(error)}`);
     }
-    const count = await db.budgets.where('concertId').equals(concertId).count();
-    const data: Budget = {
-      id: item?.id || crypto.randomUUID(),
-      concertId,
-      ...form,
-      order: item?.order ?? count + 1,
-      createdAt: item?.createdAt || new Date().toISOString(),
-    };
-    if (item) await db.budgets.put(data);
-    else await db.budgets.add(data);
-    onSaved();
   };
 
   return (

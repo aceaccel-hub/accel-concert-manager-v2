@@ -101,8 +101,13 @@ export default function Dashboard() {
   const checkedCount = checklists.filter((c) => c.isDone).length;
   const checkRate = checklists.length > 0 ? Math.round((checkedCount / checklists.length) * 100) : 0;
 
-  // 예산 (전체 plan vs paid)
-  const totalPlannedIncome = budgets.filter((b) => b.type === '수입').reduce((s, b) => s + b.plannedAmount, 0);
+  // 예산 (수입/지출 각각 계획 vs 실제)
+  const incomeItems = budgets.filter((b) => b.type === '수입');
+  const expenseItems = budgets.filter((b) => b.type === '지출');
+  const totalPlannedIncome = incomeItems.reduce((s, b) => s + b.plannedAmount, 0);
+  const totalActualIncome = incomeItems.reduce((s, b) => s + b.paidAmount, 0);
+  const totalPlannedExpense = expenseItems.reduce((s, b) => s + b.plannedAmount, 0);
+  const totalActualExpense = expenseItems.reduce((s, b) => s + b.paidAmount, 0);
 
   const goConcertTab = (tab: string) => {
     if (!selectedConcertId) {
@@ -291,16 +296,12 @@ export default function Dashboard() {
               empty={budgets.length === 0 ? '예산 항목이 없습니다.' : null}
             >
               <div className="text-sm space-y-1.5">
-                <SummaryRow label="총 예산(계획)" value={`${totalPlannedIncome.toLocaleString()}원`} />
+                <SummaryRow label="수입(실제)" value={`${totalActualIncome.toLocaleString()}원`} valueClass="text-green-600" />
+                <SummaryRow label="지출(실제)" value={`${totalActualExpense.toLocaleString()}원`} valueClass="text-red-600" />
                 <SummaryRow
-                  label="집행 지출"
-                  value={`${budgetSummary.expense.toLocaleString()}원`}
-                  valueClass="text-red-600"
-                />
-                <SummaryRow
-                  label="잔액(실집행 기준)"
-                  value={`${budgetSummary.balance.toLocaleString()}원`}
-                  valueClass={budgetSummary.balance >= 0 ? 'text-green-600' : 'text-red-600'}
+                  label="잔액"
+                  value={`${(totalActualIncome - totalActualExpense).toLocaleString()}원`}
+                  valueClass={(totalActualIncome - totalActualExpense) >= 0 ? 'text-green-600' : 'text-red-600'}
                   bold
                 />
               </div>

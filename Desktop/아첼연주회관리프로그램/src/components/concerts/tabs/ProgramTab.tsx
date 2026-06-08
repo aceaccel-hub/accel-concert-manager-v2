@@ -469,13 +469,19 @@ function ProgramItemForm({
       return;
     }
     try {
+      console.log('handleSave: form data =', form);
+      console.log('handleSave: repId =', repId);
       if (item) {
         await updateProgramItem(item.id, form);
       } else {
-        await addProgramItem(concertId, { ...form, repertoireId: repId || undefined });
+        const programData = { ...form, repertoireId: repId || undefined };
+        console.log('handleSave: calling addProgramItem with:', { concertId, programData });
+        await addProgramItem(concertId, programData);
       }
+      console.log('handleSave: success');
       onSaved();
     } catch (e: any) {
+      console.error('handleSave: error =', e);
       if (e?.message === 'DUPLICATE_REPERTOIRE') {
         onClose();
         onDuplicate(`이미 곡목 관리에 등록된 곡입니다. 확인 후 다시 시도해 주세요.`);
