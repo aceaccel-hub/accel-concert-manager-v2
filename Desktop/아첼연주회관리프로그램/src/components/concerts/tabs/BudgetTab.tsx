@@ -416,10 +416,6 @@ function SortableBudgetRow({
   const isMemberPayItem = b.id.endsWith('_memberFee');
 
   const handleEdit = () => {
-    if (isMemberPayItem) {
-      toast.error('단원페이는 MembersTab에서 수정해주세요.');
-      return;
-    }
     onEdit();
   };
 
@@ -440,11 +436,7 @@ function SortableBudgetRow({
       <td className="px-4 py-3 text-center"><StatusBadge status={b.paymentStatus} /></td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-1">
-          <button
-            onClick={handleEdit}
-            className={`${isMemberPayItem ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600'}`}
-            disabled={isMemberPayItem}
-          >
+          <button onClick={handleEdit} className="text-gray-400 hover:text-indigo-600">
             <Edit2 size={14} />
           </button>
           <button
@@ -650,6 +642,7 @@ function BudgetForm({
 
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
   const categories = form.type === '수입' ? incomeCategories : expenseCategories;
+  const isMemberPayItem = item?.id?.endsWith('_memberFee') ?? false;
 
   const handleSave = async () => {
     try {
@@ -709,7 +702,16 @@ function BudgetForm({
         </div>
         <div>
           <label className="label">예상 금액 (원)</label>
-          <SmartInput type="number" name="예상금액" className="input" value={form.plannedAmount} onChange={e => set('plannedAmount', +e.target.value)} />
+          {isMemberPayItem ? (
+            <>
+              <div className="input bg-gray-50 text-gray-600 cursor-not-allowed px-3 py-2">
+                {form.plannedAmount.toLocaleString()}원
+              </div>
+              <p className="text-xs text-gray-400 mt-1">(MembersTab에서 수정)</p>
+            </>
+          ) : (
+            <SmartInput type="number" name="예상금액" className="input" value={form.plannedAmount} onChange={e => set('plannedAmount', +e.target.value)} />
+          )}
         </div>
         <div>
           <label className="label">실제 금액 (원)</label>
