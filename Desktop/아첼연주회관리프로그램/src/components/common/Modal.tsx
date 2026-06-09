@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 interface Props {
   title: string;
@@ -17,25 +17,68 @@ const sizes = {
 };
 
 export default function Modal({ title, onClose, children, size = 'md', footer }: Props) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
+
   useEffect(() => {
+    // 이전 포커스 저장
+    previousActiveElement.current = document.activeElement;
+
+    // 모달 오픈 시 첫 포커스 가능 요소로 포커스 이동
+    const focusableElements = modalRef.current?.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    ) ?? [];
+    const firstElement = focusableElements[0] as HTMLElement;
+    if (firstElement) {
+      setTimeout(() => firstElement.focus(), 0);
+    }
+
+    // 키보드 이벤트 핸들러
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      // Tab 포커스 갇히기
+      if (e.key === 'Tab' && focusableElements.length > 0) {
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+        const isLastElement = document.activeElement === lastElement;
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && isLastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
     };
+
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+
+    // 모달 닫힐 때 이전 포커스 복원
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
+    };
   }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
-        className={`relative bg-white rounded-xl shadow-2xl w-full ${sizes[size]} max-h-[90vh] flex flex-col`}
+        ref={modalRef}
+        className={`relative bg-white rounded-xl shadow-2xl w-full ${sizes[size]} max-h-[90vh] flex flex-col ring-2 ring-offset-2 ring-blue-500`}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-lg transition-colors p-1"
             aria-label="닫기"
           >
             <X size={20} />
