@@ -483,7 +483,6 @@ function AddMemberFromDB({
 }) {
   const available = allMembers.filter((m) => !existing.includes(m.id));
   const [selected, setSelected] = useState<string[]>([]);
-  const [fees, setFees] = useState<Record<string, number>>({});
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -492,8 +491,7 @@ function AddMemberFromDB({
       const m = allMembers.find((mm) => mm.id === memberId);
       if (!m) continue;
       try {
-        const fee = fees[memberId] ?? m.baseFee ?? 0;
-        await addMemberToConcert(concertId, memberId, { role: m.role, part: m.part, fee, isReserve: false });
+        await addMemberToConcert(concertId, memberId, { role: m.role, part: m.part, fee: m.baseFee, isReserve: false });
       } catch (e: any) {
         if (e?.message !== 'ALREADY_IN_CONCERT') throw e;
       }
@@ -518,40 +516,21 @@ function AddMemberFromDB({
       {available.length === 0 ? (
         <p className="text-sm text-gray-500">추가할 수 있는 단원이 없습니다.</p>
       ) : (
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-2 max-h-80 overflow-y-auto">
           {available.map((m) => (
-            <div key={m.id} className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
-              <label className="flex items-center justify-between gap-3 cursor-pointer mb-2">
-                <div className="flex items-center gap-3 flex-1">
-                  <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} className="rounded" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{m.name}</p>
-                    <p className="text-xs text-gray-500">{m.instrument} · {m.part} · {m.role}</p>
-                  </div>
+            <label key={m.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <div className="flex items-center gap-3 flex-1">
+                <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} className="rounded" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                  <p className="text-xs text-gray-500">{m.instrument} · {m.part} · {m.role}</p>
                 </div>
-              </label>
-              {selected.includes(m.id) && (
-                <div className="ml-7 pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-gray-600 w-12">사례비:</span>
-                    <input
-                      type="text"
-                      value={fees[m.id] !== undefined ? fees[m.id] : (m.baseFee ?? '')}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/,/g, '');
-                        const num = val === '' ? 0 : parseInt(val, 10);
-                        if (!isNaN(num)) {
-                          setFees((f) => ({ ...f, [m.id]: num }));
-                        }
-                      }}
-                      className="input py-1 px-2 w-28 text-xs"
-                      placeholder={m.baseFee ? `${m.baseFee}` : '0'}
-                    />
-                    <span className="text-gray-400">원</span>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-semibold text-gray-900">{m.baseFee ? `${m.baseFee.toLocaleString()}원` : '미등록'}</p>
+                <p className="text-xs text-gray-400">기본 사례비</p>
+              </div>
+            </label>
           ))}
         </div>
       )}
