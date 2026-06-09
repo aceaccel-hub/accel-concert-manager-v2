@@ -164,7 +164,7 @@ export default function Combobox({
     <div ref={containerRef} className="relative">
       <div
         className={`input p-0 flex items-center justify-between cursor-text relative transition-all ${
-          open ? 'ring-2 ring-offset-2 ring-blue-500 border-blue-500' : 'border-gray-200'
+          open ? 'border-blue-400 shadow-sm' : 'border-gray-200'
         }`}
         onClick={() => setOpen(true)}
       >
@@ -197,15 +197,15 @@ export default function Combobox({
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-blue-500 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
           {filtered.length > 0 ? (
             filtered.map((item, idx) => (
               <div
                 key={idx}
                 className={`flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-b-0 group transition-colors ${
                   highlightedIndex === idx
-                    ? 'bg-blue-500 text-white'
-                    : 'hover:bg-blue-50 text-gray-700'
+                    ? 'bg-blue-50'
+                    : 'hover:bg-gray-50'
                 }`}
               >
                 <button
@@ -213,7 +213,7 @@ export default function Combobox({
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   onMouseLeave={() => setHighlightedIndex(-1)}
                   className={`flex-1 text-left text-sm ${
-                    highlightedIndex === idx ? 'text-white font-medium' : ''
+                    highlightedIndex === idx ? 'font-medium text-gray-900' : 'text-gray-700'
                   }`}
                   type="button"
                 >
@@ -221,24 +221,16 @@ export default function Combobox({
                 </button>
                 {savedItems.has(item) && (
                   <div className="flex items-center gap-2">
-                    <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded ${
-                      highlightedIndex === idx
-                        ? 'bg-blue-400 text-white'
-                        : 'bg-green-100 text-green-700'
-                    }`}>
+                    <span className="flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded">
                       <Check size={12} /> 저장됨
                     </span>
                     <button
                       onClick={(e) => handleDelete(e, item)}
-                      className={`p-1 rounded transition-all ${
-                        highlightedIndex === idx
-                          ? 'bg-blue-400 hover:bg-blue-600'
-                          : 'hover:bg-red-100 opacity-0 group-hover:opacity-100'
-                      }`}
+                      className="p-1 hover:bg-red-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                       type="button"
                       title="삭제"
                     >
-                      <Trash2 size={14} className={highlightedIndex === idx ? 'text-white' : 'text-red-600'} />
+                      <Trash2 size={14} className="text-red-600" />
                     </button>
                   </div>
                 )}
@@ -251,17 +243,13 @@ export default function Combobox({
               onMouseLeave={() => setHighlightedIndex(-1)}
               className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                 highlightedIndex === 0
-                  ? 'bg-blue-500 text-white'
-                  : 'hover:bg-blue-50 text-gray-700'
+                  ? 'bg-blue-50'
+                  : 'hover:bg-gray-50'
               }`}
               type="button"
             >
-              <span className={`font-medium ${highlightedIndex === 0 ? 'text-white' : 'text-blue-600'}`}>
-                "{input}"
-              </span>
-              <span className={highlightedIndex === 0 ? 'text-blue-100' : 'text-gray-500'}>
-                {' '}추가하기 (엔터 또는 클릭)
-              </span>
+              <span className="font-medium text-blue-600">"{input}"</span>
+              <span className="text-gray-500"> 추가하기 (엔터 또는 클릭)</span>
             </button>
           ) : (
             <div className="px-3 py-2 text-sm text-gray-400">항목이 없습니다</div>

@@ -65,23 +65,23 @@ body,
   }
 
   .btn-primary {
-    @apply inline-flex items-center gap-1.5 bg-[#2563eb] text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+    @apply inline-flex items-center gap-1.5 bg-[#2563eb] text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:shadow-md;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center gap-1.5 bg-white text-gray-700 border border-gray-300 px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+    @apply inline-flex items-center gap-1.5 bg-white text-gray-700 border border-gray-300 px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-blue-400 focus:shadow-sm;
   }
 
   .btn-danger {
-    @apply inline-flex items-center gap-1.5 bg-red-600 text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500;
+    @apply inline-flex items-center gap-1.5 bg-red-600 text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:shadow-md;
   }
 
   .btn-accent {
-    @apply inline-flex items-center gap-1.5 bg-[#ebaf19] text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-[#d49d0e] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500;
+    @apply inline-flex items-center gap-1.5 bg-[#ebaf19] text-white px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-[#d49d0e] transition-colors focus:outline-none focus:shadow-md;
   }
 
   .input {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] disabled:bg-gray-100 transition-all;
+    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 focus:shadow-sm disabled:bg-gray-100 transition-all;
   }
 
   .label {
@@ -93,29 +93,16 @@ body,
   }
 
   .tab {
-    @apply px-4 py-3 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+    @apply px-4 py-3 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-800 transition-colors focus:outline-none;
   }
   .tab.active {
     @apply text-[#2563eb] border-[#2563eb];
   }
 
   .sidebar-item {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-300 hover:bg-[#243460] hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-300 hover:bg-[#243460] hover:text-white transition-colors focus:outline-none;
   }
   .sidebar-item.active {
     @apply bg-[#2d4a8a] text-white font-semibold;
-  }
-
-  /* 키보드 네비게이션 포커스 강조 */
-  *:focus-visible {
-    @apply outline-none;
-  }
-
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible {
-    @apply ring-2 ring-offset-2 ring-blue-500 rounded;
   }
 }

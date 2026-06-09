@@ -72,13 +72,13 @@ export default function Modal({ title, onClose, children, size = 'md', footer }:
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
         ref={modalRef}
-        className={`relative bg-white rounded-xl shadow-2xl w-full ${sizes[size]} max-h-[90vh] flex flex-col ring-2 ring-offset-2 ring-blue-500`}
+        className={`relative bg-white rounded-xl shadow-2xl w-full ${sizes[size]} max-h-[90vh] flex flex-col`}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-lg transition-colors p-1"
+            className="text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-700 rounded-lg transition-colors p-1"
             aria-label="닫기"
           >
             <X size={20} />
