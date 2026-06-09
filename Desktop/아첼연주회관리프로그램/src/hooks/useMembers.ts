@@ -104,7 +104,7 @@ export async function addMemberToConcert(
   // 자동으로 단원페이 지출 항목 생성
   const memberFee = (data.fee && data.fee > 0) ? data.fee : (member?.baseFee ?? 0);
   console.log('Adding member fee:', { name: member?.name, fee: memberFee, baseFee: member?.baseFee, dataFee: data.fee });
-  if (memberFee > 0 && member?.name) {
+  if (member?.name) {
     try {
       await db.budgets.add({
         id: crypto.randomUUID(),
@@ -122,7 +122,7 @@ export async function addMemberToConcert(
       console.error('Failed to create budget for member:', error);
     }
   } else {
-    console.log('Skipped budget creation: fee too low or member missing', { memberFee, memberName: member?.name });
+    console.log('Skipped budget creation: member name missing', { memberFee, memberName: member?.name });
   }
 }
 
