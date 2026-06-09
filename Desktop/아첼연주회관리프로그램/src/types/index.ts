@@ -177,7 +177,9 @@ export interface Rehearsal {
   id: string;
   concertId: string;
   date: string;
-  time: string;
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
+  time?: string; // 호환성 유지 (레거시)
   place: string;
   type: RehearsalType;
   targetPieces?: string[];

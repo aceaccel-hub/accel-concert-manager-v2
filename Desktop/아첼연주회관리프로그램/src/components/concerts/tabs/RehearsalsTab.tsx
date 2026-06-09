@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Trash2, Edit2, Users } from 'lucide-react';
+import { Plus, Trash2, Edit2, Users, X } from 'lucide-react';
 import type {
   Rehearsal,
   RehearsalType,
@@ -9,6 +9,7 @@ import type {
   ConcertMember,
   Member,
   Evaluation,
+  ProgramItem,
 } from '../../../types';
 import Modal from '../../common/Modal';
 import {
@@ -20,6 +21,7 @@ import {
   recordAttendance,
 } from '../../../hooks/useRehearsals';
 import { getConcertMembers } from '../../../hooks/useMembers';
+import { getProgramItems } from '../../../hooks/useProgram';
 import type { ConcertTabContext } from '../ConcertDetail';
 
 const REHEARSAL_TYPES: RehearsalType[] = ['섹션연습', '합주연습', '드레스리허설', '기타'];
@@ -210,7 +212,12 @@ function RehearsalCard({
           <div className="flex items-center gap-2 mb-1">
             <span className="badge bg-blue-50 text-blue-700">{r.type}</span>
             <span className="text-sm font-semibold text-gray-900">
-              {r.date} {r.time}
+              {r.date}{' '}
+              {r.startTime && r.endTime
+                ? `${r.startTime} ~ ${r.endTime}`
+                : r.startTime
+                  ? r.startTime
+                  : r.time}
             </span>
             {r.conductorEvaluation && (
               <span className="badge bg-yellow-50 text-yellow-700">
@@ -225,17 +232,6 @@ function RehearsalCard({
           {r.dressCode && <p className="text-xs text-gray-500 mt-1">복장: {r.dressCode}</p>}
           {r.equipmentMemo && <p className="text-xs text-gray-500 mt-1">준비물: {r.equipmentMemo}</p>}
           {r.memo && <p className="text-xs text-gray-400 mt-1 italic">{r.memo}</p>}
-          {r.progressRate != null && (
-            <div className="mt-2 flex items-center gap-2">
-              <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-400 rounded-full"
-                  style={{ width: `${r.progressRate}%` }}
-                />
-              </div>
-              <span className="text-xs text-gray-500">진행도 {r.progressRate}%</span>
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-1.5 ml-4 shrink-0">
           <button onClick={() => onAttendance(r)} className="btn-secondary text-xs py-1 px-2">
@@ -266,10 +262,11 @@ function RehearsalForm({
 }) {
   const [form, setForm] = useState({
     date: '',
-    time: '',
+    startTime: '',
+    endTime: '',
     place: '',
     type: '합주연습' as RehearsalType,
-    targetPieces: '',
+    targetPieces: [] as string[],
     progressRate: 0,
     memo: '',
     dressCode: '',
@@ -277,15 +274,25 @@ function RehearsalForm({
     conductorEvaluation: '' as Evaluation | '',
     nextTask: '',
   });
+  const [showPiecesPicker, setShowPiecesPicker] = useState(false);
+  const [programItems, setProgramItems] = useState<ProgramItem[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      setProgramItems(await getProgramItems(concertId));
+    };
+    load();
+  }, [concertId]);
 
   useEffect(() => {
     if (item) {
       setForm({
         date: item.date,
-        time: item.time,
+        startTime: item.startTime || item.time || '',
+        endTime: item.endTime || '',
         place: item.place,
         type: item.type,
-        targetPieces: (item.targetPieces ?? []).join(', '),
+        targetPieces: item.targetPieces ?? [],
         progressRate: item.progressRate ?? 0,
         memo: item.memo ?? '',
         dressCode: item.dressCode ?? '',
@@ -303,12 +310,12 @@ function RehearsalForm({
     }
     const payload = {
       date: form.date,
-      time: form.time,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      time: form.startTime,
       place: form.place,
       type: form.type,
-      targetPieces: form.targetPieces
-        ? form.targetPieces.split(',').map((s) => s.trim()).filter(Boolean)
-        : [],
+      targetPieces: form.targetPieces,
       progressRate: form.progressRate,
       memo: form.memo,
       dressCode: form.dressCode,
@@ -350,13 +357,23 @@ function RehearsalForm({
             onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
           />
         </div>
+        <div />
         <div>
-          <label className="label">시간</label>
+          <label className="label">시작 시간</label>
           <input
             type="time"
             className="input"
-            value={form.time}
-            onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+            value={form.startTime}
+            onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="label">종료 시간</label>
+          <input
+            type="time"
+            className="input"
+            value={form.endTime}
+            onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
           />
         </div>
         <div className="col-span-2">
@@ -391,13 +408,38 @@ function RehearsalForm({
           />
         </div>
         <div className="col-span-2">
-          <label className="label">대상 곡목 (쉼표로 구분)</label>
-          <input
-            className="input"
-            value={form.targetPieces}
-            onChange={(e) => setForm((f) => ({ ...f, targetPieces: e.target.value }))}
-            placeholder="Vivaldi - Four Seasons, Mozart - Symphony No.40"
-          />
+          <label className="label">대상 곡목</label>
+          <p className="text-xs text-gray-500 mb-2">{form.targetPieces.length}개 선택됨</p>
+          <button
+            type="button"
+            onClick={() => setShowPiecesPicker(true)}
+            className="w-full text-left p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {form.targetPieces.length > 0 ? (
+              <div className="space-y-1">
+                {form.targetPieces.map((piece) => (
+                  <div key={piece} className="text-sm text-gray-700 flex items-center justify-between">
+                    <span>{piece}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForm((f) => ({
+                          ...f,
+                          targetPieces: f.targetPieces.filter((p) => p !== piece),
+                        }));
+                      }}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-sm text-gray-400">곡목을 선택하세요</span>
+            )}
+          </button>
         </div>
         <div>
           <label className="label">지휘자 평가</label>
@@ -449,6 +491,64 @@ function RehearsalForm({
           />
         </div>
       </div>
+
+      {showPiecesPicker && (
+        <Modal
+          title="곡목 선택"
+          onClose={() => setShowPiecesPicker(false)}
+          size="md"
+        >
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {programItems.length > 0 ? (
+              programItems.map((item) => {
+                const pieceTitle = `${item.composer} - ${item.title}`;
+                const isSelected = form.targetPieces.includes(pieceTitle);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setForm((f) => ({
+                          ...f,
+                          targetPieces: f.targetPieces.filter((p) => p !== pieceTitle),
+                        }));
+                      } else {
+                        setForm((f) => ({
+                          ...f,
+                          targetPieces: [...f.targetPieces, pieceTitle],
+                        }));
+                      }
+                    }}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      isSelected
+                        ? 'bg-blue-50 border-blue-300'
+                        : 'bg-white border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        readOnly
+                        className="cursor-pointer"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{item.composer} - {item.title}</p>
+                        {item.movement && <p className="text-xs text-gray-500">{item.movement}</p>}
+                        {item.duration && <p className="text-xs text-gray-500">{item.duration}분</p>}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-6">
+                이 연주회에 등록된 곡목이 없습니다.
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
     </Modal>
   );
 }

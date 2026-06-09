@@ -30,7 +30,11 @@ export type RehearsalUpdateInput = Partial<
 export async function getRehearsals(concertId: string): Promise<Rehearsal[]> {
   if (!concertId) return [];
   const list = await db.rehearsals.where('concertId').equals(concertId).toArray();
-  return list.sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
+  return list.sort((a, b) => {
+    const aTime = a.startTime || a.time || '';
+    const bTime = b.startTime || b.time || '';
+    return a.date === b.date ? aTime.localeCompare(bTime) : a.date.localeCompare(b.date);
+  });
 }
 
 export async function createRehearsal(

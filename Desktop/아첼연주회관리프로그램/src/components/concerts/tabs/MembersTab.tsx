@@ -104,13 +104,14 @@ function EditableRow({
   );
   const [phone, setPhone] = useState(cm.member?.phone || '');
   const [fee, setFee] = useState(cm.fee ?? cm.member?.baseFee ?? 0);
+  const [bankAccount, setBankAccount] = useState(cm.member?.bankAccount || '');
 
   const handleSave = async () => {
     // concertMembers의 파트/역할/사례비 갱신
     await db.concertMembers.update(cm.id, { part, role, fee });
-    // members DB의 연락처도 함께 갱신
+    // members DB의 연락처/계좌번호도 함께 갱신
     if (cm.member?.id) {
-      await updateMember(cm.member.id, { phone, part, role });
+      await updateMember(cm.member.id, { phone, part, role, bankAccount });
     }
     showToast(`${cm.member?.name} 정보가 저장되었습니다.`);
     onSaved();
@@ -167,7 +168,14 @@ function EditableRow({
         />
       </td>
       <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.bankName || '-'}</td>
-      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.bankAccount || '-'}</td>
+      <td className="px-3 py-2">
+        <input
+          className="input text-xs py-1 px-2 w-32"
+          value={bankAccount}
+          onChange={(e) => setBankAccount(e.target.value)}
+          placeholder="계좌번호"
+        />
+      </td>
       <td className="px-4 py-2 text-center">
         <button
           onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onSaved)}
