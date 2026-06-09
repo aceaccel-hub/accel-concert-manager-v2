@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Concert, Group, ConcertStatus } from '../../types';
 import Modal from '../common/Modal';
-import { getAllGroups } from '../../hooks/useGroups';
+import { getAllGroups, addGroupToConcert, removeGroupFromConcert, getConcertGroups } from '../../hooks/useGroups';
 import { createConcert, updateConcert, getAllConcerts, copyConcertData } from '../../hooks/useConcert';
 
 interface Props {
@@ -93,9 +93,42 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
     };
     if (concert) {
       await updateConcert(concert.id, payload);
+
+      // groupId 변경 시 ConcertGroup 관리
+      const oldGroupId = concert.groupId;
+      const newGroupId = form.groupId;
+
+      if (oldGroupId !== newGroupId) {
+        // 기존 그룹 제거
+        if (oldGroupId) {
+          const existingGroups = await getConcertGroups(concert.id);
+          const oldGroup = existingGroups.find(g => g.groupId === oldGroupId);
+          if (oldGroup) {
+            await removeGroupFromConcert(oldGroup.id);
+          }
+        }
+
+        // 새 그룹 추가
+        if (newGroupId) {
+          const selectedGroup = groups.find(g => g.id === newGroupId);
+          if (selectedGroup) {
+            await addGroupToConcert(concert.id, newGroupId, '주최');
+          }
+        }
+      }
+
       onSaved(concert.id);
     } else {
       const id = await createConcert(payload);
+
+      // 새 연주회에 그룹 추가
+      if (form.groupId) {
+        const selectedGroup = groups.find(g => g.id === form.groupId);
+        if (selectedGroup) {
+          await addGroupToConcert(id, form.groupId, '주최');
+        }
+      }
+
       if (templateId) {
         await copyConcertData(templateId, id);
       }
