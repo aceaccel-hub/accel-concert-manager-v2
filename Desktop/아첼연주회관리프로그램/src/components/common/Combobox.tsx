@@ -32,7 +32,9 @@ export default function Combobox({
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState(value);
   const [filtered, setFiltered] = useState<string[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadItems();
@@ -65,9 +67,42 @@ export default function Combobox({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && input.trim()) {
+    // Escape: 드롭다운 닫기
+    if (e.key === 'Escape') {
       e.preventDefault();
-      handleSelect(input.trim());
+      setOpen(false);
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    if (!open) {
+      // 드롭다운이 닫혀있으면 Enter로 열기
+      if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+
+    // 드롭다운이 열려있을 때
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < filtered.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filtered.length) {
+        // 선택된 항목 확정
+        handleSelect(filtered[highlightedIndex]);
+      } else if (input.trim()) {
+        // 커스텀 입력값 확정
+        handleSelect(input.trim());
+      }
+      setHighlightedIndex(-1);
     }
   };
 
@@ -128,10 +163,13 @@ export default function Combobox({
   return (
     <div ref={containerRef} className="relative">
       <div
-        className="input p-0 flex items-center justify-between cursor-text relative"
+        className={`input p-0 flex items-center justify-between cursor-text relative transition-all ${
+          open ? 'ring-2 ring-offset-2 ring-blue-500 border-blue-500' : 'border-gray-200'
+        }`}
         onClick={() => setOpen(true)}
       >
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={handleInputChange}
@@ -139,7 +177,7 @@ export default function Combobox({
           onFocus={() => setOpen(true)}
           onBlur={handleBlur}
           placeholder={placeholder}
-          className="flex-1 px-3 py-2 bg-transparent outline-none"
+          className="flex-1 px-3 py-2 bg-transparent outline-none focus:outline-none"
         />
         <div className="flex items-center gap-1 pr-2">
           {input && (
@@ -159,32 +197,48 @@ export default function Combobox({
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-blue-500 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
           {filtered.length > 0 ? (
             filtered.map((item, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 group"
+                className={`flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-b-0 group transition-colors ${
+                  highlightedIndex === idx
+                    ? 'bg-blue-500 text-white'
+                    : 'hover:bg-blue-50 text-gray-700'
+                }`}
               >
                 <button
                   onClick={() => handleSelect(item)}
-                  className="flex-1 text-left text-sm text-gray-700"
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  onMouseLeave={() => setHighlightedIndex(-1)}
+                  className={`flex-1 text-left text-sm ${
+                    highlightedIndex === idx ? 'text-white font-medium' : ''
+                  }`}
                   type="button"
                 >
                   {item}
                 </button>
                 {savedItems.has(item) && (
                   <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded">
+                    <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded ${
+                      highlightedIndex === idx
+                        ? 'bg-blue-400 text-white'
+                        : 'bg-green-100 text-green-700'
+                    }`}>
                       <Check size={12} /> 저장됨
                     </span>
                     <button
                       onClick={(e) => handleDelete(e, item)}
-                      className="p-1 hover:bg-red-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      className={`p-1 rounded transition-all ${
+                        highlightedIndex === idx
+                          ? 'bg-blue-400 hover:bg-blue-600'
+                          : 'hover:bg-red-100 opacity-0 group-hover:opacity-100'
+                      }`}
                       type="button"
                       title="삭제"
                     >
-                      <Trash2 size={14} className="text-red-600" />
+                      <Trash2 size={14} className={highlightedIndex === idx ? 'text-white' : 'text-red-600'} />
                     </button>
                   </div>
                 )}
@@ -193,11 +247,21 @@ export default function Combobox({
           ) : input ? (
             <button
               onClick={() => handleSelect(input)}
-              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-gray-700"
+              onMouseEnter={() => setHighlightedIndex(0)}
+              onMouseLeave={() => setHighlightedIndex(-1)}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                highlightedIndex === 0
+                  ? 'bg-blue-500 text-white'
+                  : 'hover:bg-blue-50 text-gray-700'
+              }`}
               type="button"
             >
-              <span className="font-medium text-blue-600">"{input}"</span>
-              <span className="text-gray-500"> 추가하기 (엔터 또는 클릭)</span>
+              <span className={`font-medium ${highlightedIndex === 0 ? 'text-white' : 'text-blue-600'}`}>
+                "{input}"
+              </span>
+              <span className={highlightedIndex === 0 ? 'text-blue-100' : 'text-gray-500'}>
+                {' '}추가하기 (엔터 또는 클릭)
+              </span>
             </button>
           ) : (
             <div className="px-3 py-2 text-sm text-gray-400">항목이 없습니다</div>
