@@ -419,7 +419,7 @@ function ProgramItemForm({
     note: '',
   });
 
-  const PARTS = ['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass'];
+  const PARTS = ['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Drum'];
 
   useEffect(() => {
     getAllRepertoire().then(setRepertoire);
