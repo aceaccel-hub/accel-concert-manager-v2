@@ -531,18 +531,24 @@ function AddMemberFromDB({
                 </div>
               </label>
               {selected.includes(m.id) && (
-                <div className="ml-7 text-xs">
-                  <label className="flex items-center gap-2">
-                    <span className="text-gray-600 w-16">사례비:</span>
+                <div className="ml-7 pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-600 w-12">사례비:</span>
                     <input
-                      type="number"
-                      value={fees[m.id] ?? m.baseFee ?? 0}
-                      onChange={(e) => setFees((f) => ({ ...f, [m.id]: +e.target.value }))}
-                      className="input text-xs py-1 w-32"
-                      placeholder={m.baseFee ? `${m.baseFee}원` : '0'}
+                      type="text"
+                      value={fees[m.id] !== undefined ? fees[m.id] : (m.baseFee ?? '')}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/,/g, '');
+                        const num = val === '' ? 0 : parseInt(val, 10);
+                        if (!isNaN(num)) {
+                          setFees((f) => ({ ...f, [m.id]: num }));
+                        }
+                      }}
+                      className="input py-1 px-2 w-28 text-xs"
+                      placeholder={m.baseFee ? `${m.baseFee}` : '0'}
                     />
                     <span className="text-gray-400">원</span>
-                  </label>
+                  </div>
                 </div>
               )}
             </div>
