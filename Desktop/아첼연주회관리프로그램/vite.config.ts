@@ -9,7 +9,13 @@ export default defineConfig({
     port: 5175,
     strictPort: true,
     watch: {
-      ignored: ['**/node_modules/**', '**/.git/**', '**/.DS_Store', '**/dist/**'],
+      ignored: ['**/node_modules/**', '**/.git/**', '**/.DS_Store', '**/dist/**', '**/*.css.map'],
+      usePolling: false,
+    },
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 5175,
     },
   },
 })
