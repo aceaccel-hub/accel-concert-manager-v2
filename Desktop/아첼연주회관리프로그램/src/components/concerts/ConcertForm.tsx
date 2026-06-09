@@ -121,17 +121,19 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
     } else {
       const id = await createConcert(payload);
 
-      // 새 연주회에 그룹 추가
-      if (form.groupId) {
+      // 템플릿에서 데이터 복사 (이미 그룹도 포함됨)
+      if (templateId) {
+        await copyConcertData(templateId, id);
+      }
+
+      // 템플릿이 없고 그룹이 선택되었다면 추가
+      if (!templateId && form.groupId) {
         const selectedGroup = groups.find(g => g.id === form.groupId);
         if (selectedGroup) {
           await addGroupToConcert(id, form.groupId, '주최');
         }
       }
 
-      if (templateId) {
-        await copyConcertData(templateId, id);
-      }
       onSaved(id);
     }
   };
