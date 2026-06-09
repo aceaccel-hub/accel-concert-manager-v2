@@ -8,5 +8,8 @@ export default defineConfig({
   server: {
     port: 5175,
     strictPort: true,
+    watch: {
+      ignored: ['**/node_modules/**', '**/.git/**', '**/.DS_Store', '**/dist/**'],
+    },
   },
 })
