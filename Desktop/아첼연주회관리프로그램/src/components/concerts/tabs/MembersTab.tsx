@@ -483,6 +483,7 @@ function AddMemberFromDB({
 }) {
   const available = allMembers.filter((m) => !existing.includes(m.id));
   const [selected, setSelected] = useState<string[]>([]);
+  const [fees, setFees] = useState<Record<string, number>>({});
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -491,7 +492,8 @@ function AddMemberFromDB({
       const m = allMembers.find((mm) => mm.id === memberId);
       if (!m) continue;
       try {
-        await addMemberToConcert(concertId, memberId, { role: m.role, part: m.part, fee: m.baseFee, isReserve: false });
+        const fee = fees[memberId] ?? m.baseFee ?? 0;
+        await addMemberToConcert(concertId, memberId, { role: m.role, part: m.part, fee, isReserve: false });
       } catch (e: any) {
         if (e?.message !== 'ALREADY_IN_CONCERT') throw e;
       }
@@ -516,21 +518,34 @@ function AddMemberFromDB({
       {available.length === 0 ? (
         <p className="text-sm text-gray-500">추가할 수 있는 단원이 없습니다.</p>
       ) : (
-        <div className="space-y-2 max-h-80 overflow-y-auto">
+        <div className="space-y-3 max-h-96 overflow-y-auto">
           {available.map((m) => (
-            <label key={m.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
-              <div className="flex items-center gap-3 flex-1">
-                <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} className="rounded" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{m.name}</p>
-                  <p className="text-xs text-gray-500">{m.instrument} · {m.part} · {m.role}</p>
+            <div key={m.id} className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+              <label className="flex items-center justify-between gap-3 cursor-pointer mb-2">
+                <div className="flex items-center gap-3 flex-1">
+                  <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} className="rounded" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                    <p className="text-xs text-gray-500">{m.instrument} · {m.part} · {m.role}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-sm font-semibold text-gray-900">{m.baseFee ? `${m.baseFee.toLocaleString()}원` : '미등록'}</p>
-                <p className="text-xs text-gray-400">기본 사례비</p>
-              </div>
-            </label>
+              </label>
+              {selected.includes(m.id) && (
+                <div className="ml-7 text-xs">
+                  <label className="flex items-center gap-2">
+                    <span className="text-gray-600 w-16">사례비:</span>
+                    <input
+                      type="number"
+                      value={fees[m.id] ?? m.baseFee ?? 0}
+                      onChange={(e) => setFees((f) => ({ ...f, [m.id]: +e.target.value }))}
+                      className="input text-xs py-1 w-32"
+                      placeholder={m.baseFee ? `${m.baseFee}원` : '0'}
+                    />
+                    <span className="text-gray-400">원</span>
+                  </label>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
