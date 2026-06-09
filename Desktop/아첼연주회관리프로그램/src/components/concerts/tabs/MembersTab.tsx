@@ -112,12 +112,34 @@ function EditableRow({
     await db.concertMembers.update(cm.id, { part, role, fee });
 
     // Budget 항목도 함께 업데이트 (연주회별 사례비 반영)
-    if (cm.member?.name && fee !== cm.fee) {
-      const budgetTitle = `${cm.member.name} 사례비`;
-      const budgets = await db.budgets.where('concertId').equals(cm.concertId ?? '').toArray();
-      const budget = budgets.find(b => b.title === budgetTitle && b.category === '단원페이');
-      if (budget) {
-        await db.budgets.update(budget.id, { plannedAmount: fee });
+    if (cm.member?.name) {
+      try {
+        const budgetTitle = `${cm.member.name} 사례비`;
+        const budgets = await db.budgets
+          .where('concertId')
+          .equals(cm.concertId)
+          .filter((b) => b.title === budgetTitle && b.category === '단원페이')
+          .toArray();
+
+        if (budgets.length > 0) {
+          // 기존 Budget 업데이트
+          await db.budgets.update(budgets[0].id, { plannedAmount: fee });
+        } else if (fee > 0) {
+          // 없으면 새로 생성
+          await db.budgets.add({
+            id: crypto.randomUUID(),
+            concertId: cm.concertId,
+            type: '지출',
+            category: '단원페이',
+            title: budgetTitle,
+            plannedAmount: fee,
+            paidAmount: 0,
+            paymentStatus: '예정',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        console.error('Budget update error:', error);
       }
     }
 
