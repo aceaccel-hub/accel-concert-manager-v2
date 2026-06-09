@@ -54,6 +54,7 @@ export default function Combobox({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInput(val);
+    onChange(val);
     if (val) {
       const matches = items.filter((item) => item.toLowerCase().includes(val.toLowerCase()));
       setFiltered(matches);
