@@ -52,20 +52,47 @@ export default function BudgetTab() {
   useEffect(() => { load(); }, [concertId]);
 
   const income  = budgets.filter(b => b.type === '수입');
-  const expense = budgets.filter(b => b.type === '지출');
+  // 지출내역: Budget의 지출 + ConcertMember의 단원페이 (동기화 문제 해결)
+  const budgetExpense = budgets.filter(b => b.type === '지출' && b.category !== '단원페이');
+  const memberPayExpense: Budget[] = concertMembers
+    .filter(cm => cm.fee > 0)
+    .map(cm => {
+      const member = members.find(m => m.id === cm.memberId);
+      return {
+        id: cm.id + '_memberFee',
+        concertId: cm.concertId,
+        type: '지출',
+        category: '단원페이',
+        title: `${member?.name || '?'} 사례비`,
+        plannedAmount: cm.fee,
+        paidAmount: 0,
+        paymentStatus: '예정',
+        createdAt: new Date().toISOString(),
+      } as Budget;
+    });
+  const expense = [...budgetExpense, ...memberPayExpense];
+
   const totalIncomePlanned = income.reduce((s, b) => s + b.plannedAmount, 0);
   const totalIncomeActual = income.reduce((s, b) => s + b.paidAmount, 0);
   const totalExpensePlanned = expense.reduce((s, b) => s + b.plannedAmount, 0);
   const totalExpenseActual = expense.reduce((s, b) => s + b.paidAmount, 0);
 
-  const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as string);
+  const handleDragStart = (e: DragStartEvent) => {
+    // memberPayExpense 항목은 드래그 불가
+    if (e.active.id.toString().endsWith('_memberFee')) return;
+    setActiveId(e.active.id as string);
+  };
+
   const handleDragEnd = async (e: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = e;
     if (!over || active.id === over.id) return;
+    if (active.id.toString().endsWith('_memberFee')) return;
 
     const activeIdx = budgets.findIndex(b => b.id === active.id);
     const overIdx = budgets.findIndex(b => b.id === over.id);
+    if (activeIdx === -1 || overIdx === -1) return;
+
     const moved = arrayMove(budgets, activeIdx, overIdx);
 
     try {
@@ -82,6 +109,10 @@ export default function BudgetTab() {
   };
 
   const handleDelete = async (id: string) => {
+    if (id.endsWith('_memberFee')) {
+      toast.error('단원페이는 MembersTab에서 수정해주세요.');
+      return;
+    }
     if (!confirm('삭제하시겠습니까?')) return;
     await db.budgets.delete(id);
     load();
@@ -382,13 +413,24 @@ function SortableBudgetRow({
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: b.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 };
   const bal = b.plannedAmount - b.paidAmount;
+  const isMemberPayItem = b.id.endsWith('_memberFee');
+
+  const handleEdit = () => {
+    if (isMemberPayItem) {
+      toast.error('단원페이는 MembersTab에서 수정해주세요.');
+      return;
+    }
+    onEdit();
+  };
 
   return (
     <tr ref={setNodeRef} style={style} className={`hover:bg-gray-50 ${isDragging ? 'bg-indigo-50' : ''}`}>
       <td className="px-2 py-3">
-        <div {...attributes} {...listeners} className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex justify-center">
-          <GripVertical size={16} />
-        </div>
+        {!isMemberPayItem && (
+          <div {...attributes} {...listeners} className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex justify-center">
+            <GripVertical size={16} />
+          </div>
+        )}
       </td>
       <td className="px-4 py-3 text-gray-500 text-xs">{b.category}</td>
       <td className="px-4 py-3 font-medium text-gray-900">{b.title}</td>
@@ -398,8 +440,20 @@ function SortableBudgetRow({
       <td className="px-4 py-3 text-center"><StatusBadge status={b.paymentStatus} /></td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-1">
-          <button onClick={onEdit} className="text-gray-400 hover:text-indigo-600"><Edit2 size={14} /></button>
-          <button onClick={onDelete} className="text-gray-400 hover:text-red-600"><Trash2 size={14} /></button>
+          <button
+            onClick={handleEdit}
+            className={`${isMemberPayItem ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600'}`}
+            disabled={isMemberPayItem}
+          >
+            <Edit2 size={14} />
+          </button>
+          <button
+            onClick={onDelete}
+            className={`${isMemberPayItem ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-600'}`}
+            disabled={isMemberPayItem}
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
       </td>
     </tr>
