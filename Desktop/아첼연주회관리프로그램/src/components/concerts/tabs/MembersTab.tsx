@@ -110,6 +110,17 @@ function EditableRow({
   const handleSave = async () => {
     // concertMembers의 파트/역할/사례비 갱신
     await db.concertMembers.update(cm.id, { part, role, fee });
+
+    // Budget 항목도 함께 업데이트 (연주회별 사례비 반영)
+    if (cm.member?.name && fee !== cm.fee) {
+      const budgetTitle = `${cm.member.name} 사례비`;
+      const budgets = await db.budgets.where('concertId').equals(cm.concertId ?? '').toArray();
+      const budget = budgets.find(b => b.title === budgetTitle && b.category === '단원페이');
+      if (budget) {
+        await db.budgets.update(budget.id, { plannedAmount: fee });
+      }
+    }
+
     // members DB의 연락처/계좌번호도 함께 갱신
     if (cm.member?.id) {
       await updateMember(cm.member.id, { phone, part, role, bankAccount });
