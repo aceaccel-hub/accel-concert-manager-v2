@@ -384,7 +384,7 @@ function RehearsalForm({
             onChange={(e) => setForm((f) => ({ ...f, place: e.target.value }))}
           />
         </div>
-        <div>
+        <div className="col-span-2">
           <label className="label">연습 유형</label>
           <select
             className="input"
@@ -395,17 +395,6 @@ function RehearsalForm({
               <option key={t}>{t}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="label">진행도 (%)</label>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            className="input"
-            value={form.progressRate}
-            onChange={(e) => setForm((f) => ({ ...f, progressRate: +e.target.value }))}
-          />
         </div>
         <div className="col-span-2">
           <label className="label">대상 곡목</label>
@@ -718,7 +707,10 @@ function CalendarView({
                       onClick={() => onEdit(r)}
                       className="block w-full text-left text-xs p-0.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 truncate"
                     >
-                      {r.time} {r.type}
+                      {r.startTime && r.endTime
+                        ? `${r.startTime}~${r.endTime}`
+                        : r.startTime || r.time}{' '}
+                      {r.type}
                     </button>
                   ))}
                 </div>

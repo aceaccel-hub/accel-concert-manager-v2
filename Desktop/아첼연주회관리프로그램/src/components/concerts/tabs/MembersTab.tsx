@@ -8,6 +8,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Plus, Trash2, UserPlus, Save, X } from 'lucide-react';
 import type { ConcertMember, Member, MemberRole } from '../../../types';
 import Modal from '../../common/Modal';
+import Combobox from '../../common/Combobox';
 import { showToast } from '../../common/Toast';
 import {
   getAllMembers,
@@ -129,11 +130,12 @@ function EditableRow({
       </td>
       <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.instrument || '-'}</td>
       <td className="px-3 py-2">
-        <input
-          className="input text-xs py-1 px-2 w-28"
+        <Combobox
+          category="part"
           value={part}
-          onChange={(e) => setPart(e.target.value)}
+          onChange={(value) => setPart(value)}
           placeholder="파트"
+          defaultOptions={['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Flute', 'Oboe', 'Clarinet', 'Bassoon']}
         />
       </td>
       <td className="px-3 py-2">

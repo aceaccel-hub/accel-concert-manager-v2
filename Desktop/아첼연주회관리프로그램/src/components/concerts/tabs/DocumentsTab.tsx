@@ -128,10 +128,14 @@ ${concert.title}
           ? '등록된 연습 일정이 없습니다.'
           : rehearsals
               .map(
-                (r) =>
-                  `• ${r.date} ${r.time} | ${r.place}\n  유형: ${r.type}${
+                (r) => {
+                  const timeStr = r.startTime && r.endTime
+                    ? `${r.startTime} ~ ${r.endTime}`
+                    : r.startTime || r.time;
+                  return `• ${r.date} ${timeStr} | ${r.place}\n  유형: ${r.type}${
                     r.targetPieces?.length ? `\n  대상곡: ${r.targetPieces.join(', ')}` : ''
-                  }${r.memo ? `\n  메모: ${r.memo}` : ''}`
+                  }${r.memo ? `\n  메모: ${r.memo}` : ''}`;
+                }
               )
               .join('\n\n'))
       );
