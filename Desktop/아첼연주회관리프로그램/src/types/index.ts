@@ -164,6 +164,11 @@ export interface ConcertMember {
   membershipFeePaid?: boolean; // 정기회비 수납 여부
   scorePrintingPaid?: boolean; // 악보 제본비 지출 여부
   note?: string;
+  // 해당 연주회에서만 사용하는 정보 (마스터 정보와 분리)
+  phone?: string; // 연주회별 연락처
+  residentNumber?: string; // 연주회별 주민등록번호
+  bankName?: string; // 연주회별 은행명
+  bankAccount?: string; // 연주회별 계좌번호
 }
 
 export interface ConcertGroup {

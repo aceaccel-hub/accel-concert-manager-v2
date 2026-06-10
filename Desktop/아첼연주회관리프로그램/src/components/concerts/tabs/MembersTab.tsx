@@ -111,8 +111,18 @@ function EditableRow({
   const [attendanceRate, setAttendanceRate] = useState(cm.attendanceRate ?? 0);
 
   const handleSave = async () => {
-    // concertMembers의 파트/역할/사례비/출석률 갱신
-    await db.concertMembers.update(cm.id, { part, role, fee, attendanceRate });
+    // 해당 연주회에서만 단원 정보 업데이트 (ConcertMember만 수정)
+    // 마스터 정보(Member)는 변경하지 않음
+    await db.concertMembers.update(cm.id, {
+      part,
+      role,
+      fee,
+      attendanceRate,
+      phone,
+      residentNumber,
+      bankName,
+      bankAccount,
+    });
 
     // Budget 항목도 함께 업데이트 (연주회별 사례비 반영)
     if (cm.member?.name) {
@@ -146,10 +156,6 @@ function EditableRow({
       }
     }
 
-    // members DB의 연락처/계좌번호/주민등록번호/은행명도 함께 갱신
-    if (cm.member?.id) {
-      await updateMember(cm.member.id, { phone, part, role, bankAccount, residentNumber, bankName });
-    }
     showToast(`${cm.member?.name} 정보가 저장되었습니다.`);
     onSaved();
   };
