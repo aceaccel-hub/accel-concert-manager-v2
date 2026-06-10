@@ -106,10 +106,13 @@ function EditableRow({
   const [phone, setPhone] = useState(cm.member?.phone || '');
   const [fee, setFee] = useState(cm.fee ?? cm.member?.baseFee ?? 0);
   const [bankAccount, setBankAccount] = useState(cm.member?.bankAccount || '');
+  const [residentNumber, setResidentNumber] = useState(cm.member?.residentNumber || '');
+  const [bankName, setBankName] = useState(cm.member?.bankName || '');
+  const [attendanceRate, setAttendanceRate] = useState(cm.attendanceRate ?? 0);
 
   const handleSave = async () => {
-    // concertMembers의 파트/역할/사례비 갱신
-    await db.concertMembers.update(cm.id, { part, role, fee });
+    // concertMembers의 파트/역할/사례비/출석률 갱신
+    await db.concertMembers.update(cm.id, { part, role, fee, attendanceRate });
 
     // Budget 항목도 함께 업데이트 (연주회별 사례비 반영)
     if (cm.member?.name) {
@@ -143,9 +146,9 @@ function EditableRow({
       }
     }
 
-    // members DB의 연락처/계좌번호도 함께 갱신
+    // members DB의 연락처/계좌번호/주민등록번호/은행명도 함께 갱신
     if (cm.member?.id) {
-      await updateMember(cm.member.id, { phone, part, role, bankAccount });
+      await updateMember(cm.member.id, { phone, part, role, bankAccount, residentNumber, bankName });
     }
     showToast(`${cm.member?.name} 정보가 저장되었습니다.`);
     onSaved();
@@ -190,9 +193,24 @@ function EditableRow({
           placeholder="연락처"
         />
       </td>
-      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.residentNumber || '-'}</td>
-      <td className="px-4 py-2 text-center text-sm text-gray-500">
-        {cm.attendanceRate != null ? `${cm.attendanceRate}%` : '-'}
+      <td className="px-3 py-2">
+        <input
+          className="input text-xs py-1 px-2 w-32"
+          value={residentNumber}
+          onChange={(e) => setResidentNumber(e.target.value)}
+          placeholder="주민등록번호"
+        />
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="number"
+          className="input text-xs py-1 px-2 w-20 text-center"
+          value={attendanceRate}
+          onChange={(e) => setAttendanceRate(+e.target.value)}
+          placeholder="출석률"
+          min="0"
+          max="100"
+        />
       </td>
       <td className="px-3 py-2 text-right">
         <input
@@ -202,7 +220,14 @@ function EditableRow({
           onChange={(e) => setFee(+e.target.value)}
         />
       </td>
-      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.bankName || '-'}</td>
+      <td className="px-3 py-2">
+        <input
+          className="input text-xs py-1 px-2 w-24"
+          value={bankName}
+          onChange={(e) => setBankName(e.target.value)}
+          placeholder="은행명"
+        />
+      </td>
       <td className="px-3 py-2">
         <input
           className="input text-xs py-1 px-2 w-32"
