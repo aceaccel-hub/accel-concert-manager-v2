@@ -156,6 +156,16 @@ function EditableRow({
 
   return (
     <tr className="bg-blue-50 border-l-4 border-l-[#2563eb]">
+      <td className="px-3 py-2">
+        <div className="flex gap-1">
+          <button onClick={handleSave} className="btn-primary text-xs py-1 px-2" title="저장">
+            <Save size={12} /> 저장
+          </button>
+          <button onClick={onCancel} className="btn-secondary text-xs py-1 px-2" title="취소">
+            <X size={12} />
+          </button>
+        </div>
+      </td>
       <td className="px-4 py-2 font-medium text-gray-900 text-sm whitespace-nowrap">
         {cm.member?.name}
         <AbilityGradeBadge
@@ -247,16 +257,6 @@ function EditableRow({
         >
           {cm.isReserve ? '예비' : '정'}
         </button>
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex gap-1">
-          <button onClick={handleSave} className="btn-primary text-xs py-1 px-2">
-            <Save size={12} /> 저장
-          </button>
-          <button onClick={onCancel} className="btn-secondary text-xs py-1 px-2">
-            <X size={12} />
-          </button>
-        </div>
       </td>
     </tr>
   );
