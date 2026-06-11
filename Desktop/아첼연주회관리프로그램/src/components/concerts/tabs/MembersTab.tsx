@@ -304,6 +304,7 @@ function ReadonlyRow({
 
   return (
     <tr className={`hover:bg-gray-50 ${cm.isReserve ? 'opacity-60' : ''}`}>
+      <td className="px-3 py-3"></td>
       <td className="px-4 py-3 font-medium text-gray-900 text-sm">
         <div className="flex items-center gap-1.5">
           {cm.member?.name || '(알 수 없음)'}
@@ -330,19 +331,17 @@ function ReadonlyRow({
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.bankName || '-'}</td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.bankAccount || '-'}</td>
       <td className="px-4 py-3 text-center">
-        <button
-          onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onReload)}
-          className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-            cm.isReserve
-              ? 'bg-orange-50 text-orange-600 border-orange-200'
-              : 'bg-gray-50 text-gray-400 border-gray-200'
-          }`}
-        >
-          {cm.isReserve ? '예비' : '정'}
-        </button>
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex gap-1.5">
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onReload)}
+            className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+              cm.isReserve
+                ? 'bg-orange-50 text-orange-600 border-orange-200'
+                : 'bg-gray-50 text-gray-400 border-gray-200'
+            }`}
+          >
+            {cm.isReserve ? '예비' : '정'}
+          </button>
           <button
             onClick={onEdit}
             className="text-xs px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
