@@ -3,6 +3,7 @@ import { Plus, Search, Trash2, Edit2, Music } from 'lucide-react';
 import { db } from '../../db/database';
 import type { Repertoire } from '../../types';
 import Modal from '../common/Modal';
+import { formatNumberInput, parseFormattedNumber } from '../../utils/calculations';
 
 export default function RepertoirePage() {
   const [items, setItems] = useState<Repertoire[]>([]);
@@ -108,7 +109,15 @@ export default function RepertoirePage() {
 
 function RepertoireForm({ item, onClose, onSaved }: { item: Repertoire | null; onClose: () => void; onSaved: () => void; }) {
   const [form, setForm] = useState({ composer: '', title: '', arrangement: '', instrumentation: '', duration: 0, difficulty: '중급' as Repertoire['difficulty'], note: '' });
-  useEffect(() => { if (item) setForm({ composer: item.composer, title: item.title, arrangement: item.arrangement || '', instrumentation: item.instrumentation || '', duration: item.duration || 0, difficulty: item.difficulty || '중급', note: item.note || '' }); }, []);
+  const [formattedDuration, setFormattedDuration] = useState('');
+
+  useEffect(() => {
+    if (item) {
+      setForm({ composer: item.composer, title: item.title, arrangement: item.arrangement || '', instrumentation: item.instrumentation || '', duration: item.duration || 0, difficulty: item.difficulty || '중급', note: item.note || '' });
+      setFormattedDuration(item.duration ? item.duration.toString() : '');
+    }
+  }, []);
+
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
@@ -126,7 +135,7 @@ function RepertoireForm({ item, onClose, onSaved }: { item: Repertoire | null; o
         <div><label className="label">곡명 *</label><input className="input" value={form.title} onChange={e => set('title', e.target.value)} /></div>
         <div><label className="label">편곡</label><input className="input" value={form.arrangement} onChange={e => set('arrangement', e.target.value)} /></div>
         <div><label className="label">편성</label><input className="input" value={form.instrumentation} onChange={e => set('instrumentation', e.target.value)} /></div>
-        <div><label className="label">예상 시간 (분)</label><input type="number" className="input" value={form.duration} onChange={e => set('duration', +e.target.value)} /></div>
+        <div><label className="label">예상 시간 (분)</label><input type="text" className="input" value={formattedDuration} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedDuration(formatted); set('duration', parseFormattedNumber(formatted)); }} /></div>
         <div>
           <label className="label">난이도</label>
           <select className="input" value={form.difficulty} onChange={e => set('difficulty', e.target.value)}>

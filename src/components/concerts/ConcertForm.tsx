@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../../db/database';
 import type { Concert, Group } from '../../types';
 import Modal from '../common/Modal';
+import { formatNumberInput, parseFormattedNumber } from '../../utils/calculations';
 
 interface Props {
   concert?: Concert | null;
@@ -16,6 +17,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
     coPerformer: '', manager: '', status: '준비중' as Concert['status'],
     groupId: '', expectedDuration: 120, progressRate: 0, note: '',
   });
+  const [formattedDuration, setFormattedDuration] = useState('120');
 
   useEffect(() => {
     db.groups.toArray().then(setGroups);
@@ -34,6 +36,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
         progressRate: concert.progressRate,
         note: concert.note || '',
       });
+      setFormattedDuration((concert.expectedDuration || 120).toString());
     }
   }, []);
 
@@ -101,7 +104,7 @@ export default function ConcertForm({ concert, onClose, onSaved }: Props) {
         </div>
         <div>
           <label className="label">예상 소요시간 (분)</label>
-          <input type="number" className="input" value={form.expectedDuration} onChange={e => set('expectedDuration', +e.target.value)} />
+          <input type="text" className="input" value={formattedDuration} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedDuration(formatted); set('expectedDuration', parseFormattedNumber(formatted)); }} />
         </div>
         <div className="col-span-2">
           <label className="label">비고</label>

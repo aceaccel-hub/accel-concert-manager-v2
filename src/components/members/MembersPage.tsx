@@ -4,6 +4,7 @@ import { db } from '../../db/database';
 import type { Member } from '../../types';
 import StatusBadge from '../common/StatusBadge';
 import Modal from '../common/Modal';
+import { formatNumberInput, parseFormattedNumber } from '../../utils/calculations';
 
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -134,9 +135,13 @@ function MemberForm({ item, onClose, onSaved }: { item: Member | null; onClose: 
     phone: '', email: '', baseFee: 0, grade: '정단원' as Member['grade'], status: '활동중' as Member['status'],
     joinDate: '', note: '',
   });
+  const [formattedBaseFee, setFormattedBaseFee] = useState('');
 
   useEffect(() => {
-    if (item) setForm({ name: item.name, instrument: item.instrument, part: item.part || '', role: item.role, phone: item.phone || '', email: item.email || '', baseFee: item.baseFee || 0, grade: item.grade || '정단원', status: item.status, joinDate: item.joinDate || '', note: item.note || '' });
+    if (item) {
+      setForm({ name: item.name, instrument: item.instrument, part: item.part || '', role: item.role, phone: item.phone || '', email: item.email || '', baseFee: item.baseFee || 0, grade: item.grade || '정단원', status: item.status, joinDate: item.joinDate || '', note: item.note || '' });
+      setFormattedBaseFee(item.baseFee ? item.baseFee.toLocaleString() : '');
+    }
   }, []);
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
@@ -163,7 +168,7 @@ function MemberForm({ item, onClose, onSaved }: { item: Member | null; onClose: 
         </div>
         <div><label className="label">연락처</label><input className="input" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
         <div><label className="label">이메일</label><input className="input" value={form.email} onChange={e => set('email', e.target.value)} /></div>
-        <div><label className="label">기본 사례비</label><input type="number" className="input" value={form.baseFee} onChange={e => set('baseFee', +e.target.value)} /></div>
+        <div><label className="label">기본 사례비</label><input type="text" className="input" value={formattedBaseFee} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedBaseFee(formatted); set('baseFee', parseFormattedNumber(formatted)); }} /></div>
         <div>
           <label className="label">등급</label>
           <select className="input" value={form.grade} onChange={e => set('grade', e.target.value)}>

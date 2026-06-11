@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { db } from '../../../db/database';
 import type { ConcertMember, Member } from '../../../types';
 import Modal from '../../common/Modal';
+import { formatNumberInput, parseFormattedNumber } from '../../../utils/calculations';
 
 interface Props { concertId: string; }
 type CMFull = ConcertMember & { member?: Member };
@@ -221,6 +222,7 @@ function SortableMemberRow({ cm, isDragging, editingId, editForm, setEditForm, o
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: cm.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 };
   const isEditing = editingId === cm.id;
+  const [formattedFee, setFormattedFee] = useState(() => editForm.fee ? editForm.fee.toLocaleString() : '');
 
   return (
     <tr ref={setNodeRef} style={style} className={`${cm.isReserve ? 'opacity-60' : ''} ${isEditing ? 'bg-indigo-50/40' : 'hover:bg-gray-50'} ${isDragging ? 'bg-indigo-50' : ''}`}>
@@ -280,7 +282,7 @@ function SortableMemberRow({ cm, isDragging, editingId, editForm, setEditForm, o
       {/* 사례비 */}
       <td className="px-4 py-3 text-right text-gray-700">
         {isEditing ? (
-          <input type="number" className="input text-xs py-1 w-24 text-right" value={editForm.fee ?? ''} onChange={e => setEditForm(f => ({ ...f, fee: +e.target.value }))} />
+          <input type="text" className="input text-xs py-1 w-24 text-right" value={formattedFee} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedFee(formatted); setEditForm(f => ({ ...f, fee: parseFormattedNumber(formatted) })); }} />
         ) : (cm.fee ? `${cm.fee.toLocaleString()}원` : '-')}
       </td>
 
@@ -371,6 +373,7 @@ function AddMemberFromDB({ concertId, existing, allMembers, onClose, onSaved }: 
 /* ── Modal: 새 단원 ── */
 function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ name: '', instrument: '', part: '', role: '일반단원' as Member['role'], phone: '', fee: 0 });
+  const [formattedFee, setFormattedFee] = useState('');
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
   const handleSave = async () => {
     if (!form.name) { toast.error('이름을 입력해 주세요.'); return; }
@@ -393,7 +396,7 @@ function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onC
           </select>
         </div>
         <div><label className="label">연락처</label><input className="input" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
-        <div><label className="label">사례비 (원)</label><input type="number" className="input" value={form.fee} onChange={e => set('fee', +e.target.value)} /></div>
+        <div><label className="label">사례비 (원)</label><input type="text" className="input" value={formattedFee} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedFee(formatted); set('fee', parseFormattedNumber(formatted)); }} /></div>
       </div>
       <div className="flex gap-2 justify-end mt-4">
         <button className="btn-secondary" onClick={onClose}>취소</button>

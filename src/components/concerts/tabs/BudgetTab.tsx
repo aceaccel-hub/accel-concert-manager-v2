@@ -13,6 +13,7 @@ import { db } from '../../../db/database';
 import type { Budget } from '../../../types';
 import Modal from '../../common/Modal';
 import StatusBadge from '../../common/StatusBadge';
+import { formatNumberInput, parseFormattedNumber } from '../../../utils/calculations';
 
 interface Props { concertId: string; }
 
@@ -230,11 +231,20 @@ function BudgetForm({ concertId, item, onClose, onSaved }: {
   const incomeCategories = ['티켓판매', '후원금', '지원금', '참가비', '기타수입'];
   const expenseCategories = ['대관료', '지휘자사례비', '협연자사례비', '단원사례비', '악보비', '홍보비', '인쇄비', '식비', '기타지출'];
   const [form, setForm] = useState({ type: '지출' as Budget['type'], category: '', title: '', plannedAmount: 0, paidAmount: 0, paymentStatus: '예정' as Budget['paymentStatus'], memo: '' });
+  const [formattedPlanned, setFormattedPlanned] = useState('');
+  const [formattedPaid, setFormattedPaid] = useState('');
+
   useEffect(() => {
-    if (item) setForm({ type: item.type, category: item.category, title: item.title, plannedAmount: item.plannedAmount, paidAmount: item.paidAmount, paymentStatus: item.paymentStatus, memo: item.memo || '' });
+    if (item) {
+      setForm({ type: item.type, category: item.category, title: item.title, plannedAmount: item.plannedAmount, paidAmount: item.paidAmount, paymentStatus: item.paymentStatus, memo: item.memo || '' });
+      setFormattedPlanned(item.plannedAmount ? item.plannedAmount.toLocaleString() : '');
+      setFormattedPaid(item.paidAmount ? item.paidAmount.toLocaleString() : '');
+    }
   }, []);
+
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
   const categories = form.type === '수입' ? incomeCategories : expenseCategories;
+
   const handleSave = async () => {
     if (!form.title || !form.category) { alert('카테고리와 항목명을 입력해 주세요.'); return; }
     const count = await db.budgets.where('concertId').equals(concertId).count();
@@ -243,6 +253,7 @@ function BudgetForm({ concertId, item, onClose, onSaved }: {
     else await db.budgets.add(data);
     onSaved();
   };
+
   return (
     <Modal title={item ? '예산 항목 편집' : '예산 항목 추가'} onClose={onClose} size="md">
       <div className="grid grid-cols-2 gap-4">
@@ -256,10 +267,10 @@ function BudgetForm({ concertId, item, onClose, onSaved }: {
           </select>
         </div>
         <div className="col-span-2"><label className="label">항목명 *</label><input className="input" value={form.title} onChange={e => set('title', e.target.value)} /></div>
-        <div><label className="label">예산 (원)</label><input type="number" className="input" value={form.plannedAmount} onChange={e => set('plannedAmount', +e.target.value)} /></div>
+        <div><label className="label">예산 (원)</label><input type="text" className="input" value={formattedPlanned} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedPlanned(formatted); set('plannedAmount', parseFormattedNumber(formatted)); }} /></div>
         <div>
           <label className="label">집행액 (원)</label>
-          <input type="number" className="input" value={form.paidAmount} onChange={e => set('paidAmount', +e.target.value)} />
+          <input type="text" className="input" value={formattedPaid} onChange={e => { const formatted = formatNumberInput(e.target.value); setFormattedPaid(formatted); set('paidAmount', parseFormattedNumber(formatted)); }} />
           <p className="text-xs text-gray-400 mt-1">잔액: {(form.plannedAmount - form.paidAmount).toLocaleString()}원</p>
         </div>
         <div><label className="label">지급 상태</label>
