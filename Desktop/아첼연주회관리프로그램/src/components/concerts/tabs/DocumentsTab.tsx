@@ -51,8 +51,7 @@ export default function DocumentsTab() {
   useEffect(() => {
     loadSaved();
     handlePreview('곡목표');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [concertId, concert]);
+  }, [concertId]);
 
   // ---------- Raw data fetch (shared by all export functions) ----------
   const fetchAllData = async () => {
