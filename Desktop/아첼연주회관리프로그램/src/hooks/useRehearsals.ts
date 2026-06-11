@@ -3,8 +3,7 @@
  *
  * - recordAttendance 는 upsert (rehearsalId+memberId 기준).
  * - 출석 기록 시 해당 단원의 attendanceRate 를 자동으로 다시 계산해 저장한다.
- *   계산식: '출석'/'지각' 으로 한 횟수 / 전체 출석 기록 횟수.
- *   (지각은 출석으로 인정, 조퇴와 결석은 미출석으로 본다.)
+ *   계산식: 각 상태별 가중치 평균 (출석 100%, 지각 80%, 조퇴 50%, 결석 0%).
  * - 연습 삭제 시 그 연습의 모든 출석 기록도 함께 정리한다.
  */
 
@@ -204,8 +203,18 @@ async function calcAttendanceRateInternal(
     .toArray();
 
   if (rows.length === 0) return 0;
-  const present = rows.filter(
-    (r) => r.status === '출석' || r.status === '지각'
-  ).length;
-  return calcProgressRate(present, rows.length);
+
+  // 각 상태별 가중치: 출석 100%, 지각 80%, 조퇴 50%, 결석 0%
+  const points = rows.map((r) => {
+    switch (r.status) {
+      case '출석': return 100;
+      case '지각': return 80;
+      case '조퇴': return 50;
+      case '결석': return 0;
+      default: return 0;
+    }
+  });
+
+  const avgPoints = points.reduce((sum, p) => sum + p, 0) / rows.length;
+  return Math.round(Math.max(0, Math.min(100, avgPoints)));
 }
