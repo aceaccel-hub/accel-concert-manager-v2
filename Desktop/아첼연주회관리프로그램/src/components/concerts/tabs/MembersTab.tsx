@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Trash2, UserPlus } from 'lucide-react';
+import { Plus, Trash2, UserPlus, Edit2 } from 'lucide-react';
 import type { ConcertMember, Member, MemberRole } from '../../../types';
 import Modal from '../../common/Modal';
 import Combobox from '../../common/Combobox';
@@ -88,32 +88,88 @@ function EditModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [part, setPart] = useState(cm.part || cm.member?.part || '');
-  const [role, setRole] = useState<MemberRole>(
-    (cm.role as MemberRole) || cm.member?.role || '일반단원'
-  );
-  const [phone, setPhone] = useState(cm.phone || cm.member?.phone || '');
-  const [fee, setFee] = useState(cm.fee ?? cm.member?.baseFee ?? 0);
-  const [bankAccount, setBankAccount] = useState(cm.bankAccount || cm.member?.bankAccount || '');
-  const [residentNumber, setResidentNumber] = useState(cm.residentNumber || cm.member?.residentNumber || '');
-  const [bankName, setBankName] = useState(cm.bankName || cm.member?.bankName || '');
-  const [attendanceRate, setAttendanceRate] = useState(cm.attendanceRate ?? 0);
+  const member = cm.member;
+  const [form, setForm] = useState({
+    instrument: '',
+    part: '',
+    role: '일반단원' as MemberRole,
+    phone: '',
+    email: '',
+    nationality: '',
+    idNumberType: '' as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
+    residentNumber: '',
+    fee: 0,
+    bankName: '',
+    bankAccount: '',
+    accountHolder: '',
+    accountHolderRelation: '',
+    attendanceRate: 0,
+    grade: '정단원',
+    status: '활동중',
+    note: '',
+  });
+
+  useEffect(() => {
+    setForm({
+      instrument: member?.instrument || '',
+      part: cm.part || member?.part || '',
+      role: (cm.role as MemberRole) || member?.role || '일반단원',
+      phone: cm.phone || member?.phone || '',
+      email: member?.email || '',
+      nationality: member?.nationality || '',
+      idNumberType: (member?.idNumberType || '') as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
+      residentNumber: cm.residentNumber || member?.residentNumber || '',
+      fee: cm.fee ?? member?.baseFee ?? 0,
+      bankName: cm.bankName || member?.bankName || '',
+      bankAccount: cm.bankAccount || member?.bankAccount || '',
+      accountHolder: member?.accountHolder || '',
+      accountHolderRelation: member?.accountHolderRelation || '',
+      attendanceRate: cm.attendanceRate ?? 0,
+      grade: member?.grade || '정단원',
+      status: member?.status || '활동중',
+      note: member?.note || '',
+    });
+  }, [cm, member]);
 
   const handleSave = async () => {
+    // 연주회 멤버 정보 업데이트
     await db.concertMembers.update(cm.id, {
-      part,
-      role,
-      fee,
-      attendanceRate,
-      phone,
-      residentNumber,
-      bankName,
-      bankAccount,
+      part: form.part,
+      role: form.role,
+      fee: form.fee,
+      attendanceRate: form.attendanceRate,
+      phone: form.phone,
+      residentNumber: form.residentNumber,
+      bankName: form.bankName,
+      bankAccount: form.bankAccount,
     });
 
-    if (cm.member?.name) {
+    // 멤버 기본 정보 업데이트
+    if (member) {
+      await updateMember(member.id, {
+        instrument: form.instrument,
+        part: form.part,
+        role: form.role,
+        phone: form.phone,
+        email: form.email,
+        nationality: form.nationality,
+        idNumberType: form.idNumberType,
+        residentNumber: form.residentNumber,
+        bankName: form.bankName,
+        bankAccount: form.bankAccount,
+        accountHolder: form.accountHolder,
+        accountHolderRelation: form.accountHolderRelation,
+        baseFee: form.fee,
+        grade: form.grade,
+        status: form.status,
+        note: form.note,
+      });
+    }
+
+    // 예산 업데이트
+    if (member?.name) {
       try {
-        const budgetTitle = `${cm.member.name} 사례비`;
+        const budgetTitle = `${member.name} 사례비`;
         const budgets = await db.budgets
           .where('concertId')
           .equals(cm.concertId)
@@ -121,15 +177,15 @@ function EditModal({
           .toArray();
 
         if (budgets.length > 0) {
-          await db.budgets.update(budgets[0].id, { plannedAmount: fee });
-        } else if (fee > 0) {
+          await db.budgets.update(budgets[0].id, { plannedAmount: form.fee });
+        } else if (form.fee > 0) {
           await db.budgets.add({
             id: crypto.randomUUID(),
             concertId: cm.concertId,
             type: '지출',
             category: '단원페이',
             title: budgetTitle,
-            plannedAmount: fee,
+            plannedAmount: form.fee,
             paidAmount: 0,
             paymentStatus: '예정',
             createdAt: new Date().toISOString(),
@@ -140,15 +196,15 @@ function EditModal({
       }
     }
 
-    showToast(`${cm.member?.name} 정보가 저장되었습니다.`);
+    showToast(`${member?.name} 정보가 저장되었습니다.`);
     onSaved();
   };
 
   return (
     <Modal
-      title={`${cm.member?.name} 수정`}
+      title={`${member?.name} 수정`}
       onClose={onClose}
-      size="md"
+      size="lg"
       footer={
         <>
           <button className="btn-secondary" onClick={onClose}>취소</button>
@@ -156,70 +212,118 @@ function EditModal({
         </>
       }
     >
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">이름</label>
-            <input className="input opacity-50 cursor-not-allowed" value={cm.member?.name || ''} disabled />
-          </div>
-          <div>
-            <label className="label">악기</label>
-            <input className="input opacity-50 cursor-not-allowed" value={cm.member?.instrument || ''} disabled />
-          </div>
+      <div className="grid grid-cols-2 gap-4">
+        {/* 기본 정보 */}
+        <div>
+          <label className="label">이름</label>
+          <input className="input opacity-50 cursor-not-allowed" value={member?.name || ''} disabled />
+        </div>
+        <div>
+          <label className="label">악기</label>
+          <input className="input" value={form.instrument} onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">파트</label>
+          <Combobox
+            category="part"
+            value={form.part}
+            onChange={(value) => setForm((f) => ({ ...f, part: value }))}
+            defaultOptions={['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Flute', 'Oboe', 'Clarinet', 'Bassoon']}
+          />
+        </div>
+        <div>
+          <label className="label">역할</label>
+          <Combobox
+            category="role"
+            value={form.role}
+            onChange={(value) => setForm((f) => ({ ...f, role: value as MemberRole }))}
+            defaultOptions={['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자']}
+          />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">파트</label>
-            <Combobox
-              category="part"
-              value={part}
-              onChange={setPart}
-              placeholder="파트"
-              defaultOptions={['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Flute', 'Oboe', 'Clarinet', 'Bassoon']}
-            />
-          </div>
-          <div>
-            <label className="label">역할</label>
-            <select className="input" value={role} onChange={(e) => setRole(e.target.value as MemberRole)}>
-              {(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </div>
+        {/* 연락처 정보 */}
+        <div>
+          <label className="label">연락처</label>
+          <input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="010-0000-0000" />
+        </div>
+        <div>
+          <label className="label">이메일</label>
+          <input className="input" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="example@email.com" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">연락처</label>
-            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-0000-0000" />
-          </div>
-          <div>
-            <label className="label">주민등록번호</label>
-            <input className="input" value={residentNumber} onChange={(e) => setResidentNumber(e.target.value)} placeholder="000000-0000000" />
-          </div>
+        {/* 신분증 정보 */}
+        <div>
+          <label className="label">신분증 유형</label>
+          <Combobox
+            category="idNumberType"
+            value={form.idNumberType}
+            onChange={(value) => setForm((f) => ({ ...f, idNumberType: value as '주민등록번호' | '외국인등록번호' | '여권번호' | '' }))}
+            defaultOptions={['주민등록번호', '외국인등록번호', '여권번호']}
+          />
+        </div>
+        <div>
+          <label className="label">신분증 번호</label>
+          <input className="input" value={form.residentNumber} onChange={(e) => setForm((f) => ({ ...f, residentNumber: e.target.value }))} placeholder="000000-0000000" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">출석률 (%)</label>
-            <input type="number" className="input" value={attendanceRate} onChange={(e) => setAttendanceRate(+e.target.value)} min="0" max="100" />
-          </div>
-          <div>
-            <label className="label">사례비 (원)</label>
-            <input type="number" className="input" value={fee} onChange={(e) => setFee(+e.target.value)} />
-          </div>
+        {/* 국적 */}
+        <div>
+          <label className="label">국적</label>
+          <input className="input" value={form.nationality} onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))} placeholder="한국" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">은행명</label>
-            <input className="input" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="국민은행" />
-          </div>
-          <div>
-            <label className="label">계좌번호</label>
-            <input className="input" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="123-456-789012" />
-          </div>
+        {/* 연주회 특화 정보 */}
+        <div>
+          <label className="label">출석률 (%)</label>
+          <input type="number" className="input" value={form.attendanceRate} onChange={(e) => setForm((f) => ({ ...f, attendanceRate: +e.target.value }))} min="0" max="100" />
+        </div>
+
+        {/* 사례비 정보 */}
+        <div>
+          <label className="label">사례비 (원)</label>
+          <input type="number" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: +e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">은행명</label>
+          <input className="input" value={form.bankName} onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))} placeholder="국민은행" />
+        </div>
+        <div>
+          <label className="label">계좌번호</label>
+          <input className="input" value={form.bankAccount} onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value }))} placeholder="123-456-789012" />
+        </div>
+        <div>
+          <label className="label">예금주명 (본인 이외)</label>
+          <input className="input" value={form.accountHolder} onChange={(e) => setForm((f) => ({ ...f, accountHolder: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">예금주와의 관계</label>
+          <input className="input" value={form.accountHolderRelation} onChange={(e) => setForm((f) => ({ ...f, accountHolderRelation: e.target.value }))} />
+        </div>
+
+        {/* 상태 정보 */}
+        <div>
+          <label className="label">등급</label>
+          <Combobox
+            category="grade"
+            value={form.grade}
+            onChange={(value) => setForm((f) => ({ ...f, grade: value }))}
+            defaultOptions={['정단원', '준단원', '객원']}
+          />
+        </div>
+        <div>
+          <label className="label">상태</label>
+          <Combobox
+            category="status"
+            value={form.status}
+            onChange={(value) => setForm((f) => ({ ...f, status: value }))}
+            defaultOptions={['활동중', '휴식중', '탈퇴']}
+          />
+        </div>
+
+        {/* 비고 */}
+        <div className="col-span-2">
+          <label className="label">비고</label>
+          <textarea className="input h-20 resize-none" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
         </div>
       </div>
     </Modal>
@@ -281,9 +385,14 @@ function MemberRow({
         </button>
       </td>
       <td className="px-4 py-3 text-center">
-        <button onClick={onRemove} className="text-gray-400 hover:text-red-600">
-          <Trash2 size={14} />
-        </button>
+        <div className="flex gap-2 justify-center">
+          <button onClick={onEdit} className="text-gray-400 hover:text-blue-600" title="수정">
+            <Edit2 size={14} />
+          </button>
+          <button onClick={onRemove} className="text-gray-400 hover:text-red-600" title="삭제">
+            <Trash2 size={14} />
+          </button>
+        </div>
       </td>
     </tr>
   );
