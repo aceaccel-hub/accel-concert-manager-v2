@@ -405,7 +405,7 @@ function ProgramItemForm({
   const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [repId, setRepId] = useState('');
   const [showRepPicker, setShowRepPicker] = useState(false);
-  const [repHistory, setRepHistory] = useState<Array<{ year: string; title: string }>>([]);
+  const [repHistory, setRepHistory] = useState<Array<{ year: string; title: string; concertId: string }>>([]);
   const [allRepHistories, setAllRepHistories] = useState<Record<string, Array<{ year: string; title: string }>>>({});
   const [form, setForm] = useState({
     composer: '',
@@ -435,6 +435,16 @@ function ProgramItemForm({
         partScoreDetail: item.partScoreDetail ?? {},
         note: item.note ?? '',
       });
+      // 편집 모드: 사용 이력 로드
+      const loadHistory = async () => {
+        const hist = await getConcertHistoryForPiece(item.composer, item.title);
+        setRepHistory(hist.map((h) => ({
+          year: h.concert.date.split('-')[0],
+          title: h.concert.title,
+          concertId: h.concert.id
+        })));
+      };
+      loadHistory();
     }
   }, [item]);
 
@@ -458,7 +468,11 @@ function ProgramItemForm({
     if (rep) {
       setForm((f) => ({ ...f, composer: rep.composer, title: rep.title, duration: rep.duration ?? 0 }));
       const hist = await getConcertHistoryForPiece(rep.composer, rep.title);
-      setRepHistory(hist.map((h) => ({ year: h.concert.date.split('-')[0], title: h.concert.title })));
+      setRepHistory(hist.map((h) => ({
+        year: h.concert.date.split('-')[0],
+        title: h.concert.title,
+        concertId: h.concert.id
+      })));
       setShowRepPicker(false);
     }
   };
@@ -518,6 +532,22 @@ function ProgramItemForm({
           ))}
         </div>
       )}
+
+      {/* 사용 이력: 편집 모드 또는 곡목 선택 모드에서 표시 */}
+      {(item || (mode === 'existing' && !item)) && repHistory.length > 0 && (
+        <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
+          <p className="text-xs font-medium text-gray-600 mb-2">📍 사용 이력</p>
+          <div className="space-y-1">
+            {repHistory.map((h, i) => (
+              <p key={i} className="text-xs text-gray-700">
+                {h.year}년 {h.title}
+                {h.concertId === concertId && <span className="ml-2 text-blue-600 font-semibold">(현재)</span>}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       {mode === 'existing' && !item && (
         <div className="mb-4 space-y-3">
           <div>
@@ -529,18 +559,6 @@ function ProgramItemForm({
               {repId ? repertoire.find((r) => r.id === repId)?.composer + ' - ' + repertoire.find((r) => r.id === repId)?.title : '곡목을 선택하세요'}
             </button>
           </div>
-          {repHistory.length > 0 && (
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-              <p className="text-xs font-medium text-gray-600 mb-2">📍 사용 이력</p>
-              <div className="space-y-1">
-                {repHistory.map((h, i) => (
-                  <p key={i} className="text-xs text-gray-700">
-                    {h.year}년 {h.title}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
