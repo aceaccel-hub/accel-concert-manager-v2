@@ -15,6 +15,7 @@ import {
   updateMember,
 } from '../../../hooks/useMembers';
 import { db } from '../../../db/database';
+import { formatNumberInput, parseFormattedNumber } from '../../../utils/calculations';
 import type { ConcertTabContext } from '../ConcertDetail';
 
 type ConcertMemberFull = ConcertMember & { member: Member };
@@ -98,7 +99,7 @@ function EditModal({
     nationality: '',
     idNumberType: '' as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
     residentNumber: '',
-    fee: 0,
+    fee: '',
     bankName: '',
     bankAccount: '',
     accountHolder: '',
@@ -119,7 +120,7 @@ function EditModal({
       nationality: member?.nationality || '',
       idNumberType: (member?.idNumberType || '') as '주민등록번호' | '외국인등록번호' | '여권번호' | '',
       residentNumber: cm.residentNumber || member?.residentNumber || '',
-      fee: cm.fee ?? member?.baseFee ?? 0,
+      fee: formatNumberInput(String(cm.fee ?? member?.baseFee ?? 0)),
       bankName: cm.bankName || member?.bankName || '',
       bankAccount: cm.bankAccount || member?.bankAccount || '',
       accountHolder: member?.accountHolder || '',
@@ -136,7 +137,7 @@ function EditModal({
     await db.concertMembers.update(cm.id, {
       part: form.part,
       role: form.role,
-      fee: form.fee,
+      fee: parseFormattedNumber(form.fee),
       attendanceRate: form.attendanceRate,
       phone: form.phone,
       residentNumber: form.residentNumber,
@@ -159,7 +160,7 @@ function EditModal({
         bankAccount: form.bankAccount,
         accountHolder: form.accountHolder,
         accountHolderRelation: form.accountHolderRelation,
-        baseFee: form.fee,
+        baseFee: parseFormattedNumber(form.fee),
         grade: form.grade,
         status: form.status,
         note: form.note,
@@ -281,7 +282,7 @@ function EditModal({
         {/* 사례비 정보 */}
         <div>
           <label className="label">사례비 (원)</label>
-          <input type="number" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: +e.target.value }))} />
+          <input type="text" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: formatNumberInput(e.target.value) }))} />
         </div>
         <div>
           <label className="label">은행명</label>
@@ -595,12 +596,12 @@ function AddMemberFromDB({ concertId, existing, allMembers, onClose, onSaved }: 
 }
 
 function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: '', instrument: '', part: '', role: '일반단원' as MemberRole, phone: '', fee: 0 });
+  const [form, setForm] = useState({ name: '', instrument: '', part: '', role: '일반단원' as MemberRole, phone: '', fee: '' });
 
   const handleSave = async () => {
     if (!form.name) { alert('이름을 입력해 주세요.'); return; }
     const memberId = await createMember({ name: form.name, instrument: form.instrument, part: form.part, role: form.role, phone: form.phone, grade: '정단원', status: '활동중' });
-    await addMemberToConcert(concertId, memberId, { role: form.role, part: form.part, fee: form.fee, isReserve: false });
+    await addMemberToConcert(concertId, memberId, { role: form.role, part: form.part, fee: parseFormattedNumber(form.fee), isReserve: false });
     onSaved();
   };
 
@@ -612,7 +613,7 @@ function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onC
         <div><label className="label">파트</label><input className="input" value={form.part} onChange={(e) => setForm((f) => ({ ...f, part: e.target.value }))} placeholder="Violin 1" /></div>
         <div><label className="label">역할</label><select className="input" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as MemberRole }))}>{(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map((r) => <option key={r}>{r}</option>)}</select></div>
         <div><label className="label">연락처</label><input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
-        <div><label className="label">사례비 (원)</label><input type="number" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: +e.target.value }))} /></div>
+        <div><label className="label">사례비 (원)</label><input type="text" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: formatNumberInput(e.target.value) }))} /></div>
       </div>
     </Modal>
   );
