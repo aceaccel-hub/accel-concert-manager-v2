@@ -811,7 +811,8 @@ function AttendanceReportView({ rehearsals, concertId }: { rehearsals: Rehearsal
       setAttendance(atts.flat());
     };
     load();
-  }, [rehearsals, concertId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [concertId]);
 
   const getStatus = (memberId: string, rehearsalId: string) => {
     return attendance.find((a) => a.memberId === memberId && a.rehearsalId === rehearsalId)?.status || '-';
@@ -820,8 +821,21 @@ function AttendanceReportView({ rehearsals, concertId }: { rehearsals: Rehearsal
   const getAttendanceRate = (memberId: string) => {
     const total = sortedRehearsals.length;
     if (total === 0) return 0;
-    const present = sortedRehearsals.filter((r) => getStatus(memberId, r.id) === '출석').length;
-    return Math.round((present / total) * 100);
+
+    // 각 상태별 가중치: 출석 100%, 지각 80%, 조퇴 50%, 결석 0%
+    const points = sortedRehearsals.map((r) => {
+      const status = getStatus(memberId, r.id);
+      switch (status) {
+        case '출석': return 100;
+        case '지각': return 80;
+        case '조퇴': return 50;
+        case '결석': return 0;
+        default: return 0;
+      }
+    });
+
+    const avgPoints = points.reduce((sum, p) => sum + p, 0) / total;
+    return Math.round(Math.max(0, Math.min(100, avgPoints)));
   };
 
   const sortedRehearsals = [...rehearsals].sort((a, b) => a.date.localeCompare(b.date));

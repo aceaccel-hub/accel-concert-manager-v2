@@ -35,6 +35,13 @@ export async function createDocument(
   await db.documents.add(doc);
 }
 
+export async function updateDocument(
+  id: string,
+  data: Partial<DocumentCreateInput>
+): Promise<void> {
+  await db.documents.update(id, data);
+}
+
 export async function deleteDocument(id: string): Promise<void> {
   await db.documents.delete(id);
 }

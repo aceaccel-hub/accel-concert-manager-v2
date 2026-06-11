@@ -65,7 +65,8 @@ export default function Modal({ title, onClose, children, size = 'md', footer }:
         previousActiveElement.current.focus();
       }
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

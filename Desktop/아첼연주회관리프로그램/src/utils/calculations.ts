@@ -35,6 +35,41 @@ export function maskBankAccount(acc?: string): string {
   return `${front}${middle}${back}`;
 }
 
+// ---------- Number Formatting ----------
+
+/**
+ * 숫자를 세자리수 콤마 형식으로 변환 (1000 → "1,000")
+ */
+export function formatNumber(num: number | string | undefined): string {
+  if (num === undefined || num === '' || num === null) return '';
+  const n = Number(num);
+  if (!Number.isFinite(n)) return '';
+  return n.toLocaleString('ko-KR');
+}
+
+/**
+ * 콤마가 있는 문자열을 숫자로 변환 ("1,000" → 1000)
+ */
+export function parseFormattedNumber(str: string | undefined): number {
+  if (!str) return 0;
+  const num = parseInt(str.replace(/,/g, ''), 10);
+  return Number.isFinite(num) ? num : 0;
+}
+
+/**
+ * 입력 필드용 실시간 포맷팅
+ * 숫자만 입력받아서 콤마를 추가하면서 커서 위치 고려
+ */
+export function formatNumberInput(value: string): string {
+  if (!value) return '';
+  // 숫자가 아닌 문자 제거 (콤마도 제거)
+  const digitsOnly = value.replace(/[^0-9]/g, '');
+  if (!digitsOnly) return '';
+  // 선행 0 제거
+  const trimmed = digitsOnly.replace(/^0+/, '') || '0';
+  return trimmed.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 // ---------- Budget ----------
 
 /**
@@ -85,8 +120,19 @@ export function calcProgressRate(done: number, total: number): number {
  * 사업소득: 3%
  * 기타소득: 3%
  */
-export function calcWithholding(amount: number, incomeType: '사업소득' | '기타소득'): number {
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
-  const rate = 0.03; // 3% 기본 세율
-  return Math.round(amount * rate);
+export function calcWithholding(
+  amount: number,
+  incomeType: '사업소득' | '기타소득'
+): { incomeTax: number; localTax: number; total: number; net: number } {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { incomeTax: 0, localTax: 0, total: 0, net: amount };
+  }
+
+  // 소득세: 3%, 지방소득세: 1% (총 4%)
+  const incomeTax = Math.round(amount * 0.03);
+  const localTax = Math.round(amount * 0.01);
+  const total = incomeTax + localTax;
+  const net = amount - total;
+
+  return { incomeTax, localTax, total, net };
 }

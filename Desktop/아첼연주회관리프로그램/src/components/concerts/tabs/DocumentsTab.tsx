@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { FileText, Clipboard, Eye, Plus, Trash2, FileSpreadsheet, FileDown, X, ChevronDown } from 'lucide-react';
+import { FileText, Clipboard, Eye, Plus, Trash2, FileSpreadsheet, FileDown, X, ChevronDown, Edit2 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { ConcertDocument, DocumentType, Member, Concert } from '../../../types';
 import { calcWithholding, maskResidentNumber } from '../../../utils/calculations';
 import {
   getDocuments,
   createDocument,
+  updateDocument,
   deleteDocument,
 } from '../../../hooks/useDocuments';
 import { getProgramItems } from '../../../hooks/useProgram';
@@ -43,6 +44,10 @@ export default function DocumentsTab() {
   const [savedDocs, setSavedDocs] = useState<ConcertDocument[]>([]);
   const [showSave, setShowSave] = useState(false);
   const [docTitle, setDocTitle] = useState('');
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [editingContent, setEditingContent] = useState('');
 
   const loadSaved = async () => {
     setSavedDocs(await getDocuments(concertId));
@@ -198,6 +203,52 @@ ${concert.title}
         `【 준비 체크리스트 】\n\n` +
         checklists.map((c) => `${c.isDone ? '☑' : '☐'} ${c.title}`).join('\n')
       );
+    }
+
+    if (type === '원천징수영수증') {
+      const receipts = cms
+        .map((cm) => {
+          const member = cms.find((m) => m.id === cm.memberId);
+          if (!member) return '';
+
+          const baseFee = Number(cm.fee) || 0;
+          const extra = Number(cm.feeExtra) || 0;
+          const deduction = Number(cm.feeDeduction) || 0;
+          const paymentAmount = Math.max(0, baseFee + extra - deduction);
+
+          if (paymentAmount === 0) return '';
+
+          const incomeType = member.incomeType ?? '사업소득';
+          const wh = calcWithholding(paymentAmount, incomeType as '사업소득' | '기타소득');
+
+          return `
+거주자의 ${incomeType} 원천징수영수증
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【 기본정보 】
+소득자명: ${member.name}
+주민등록번호: ${maskResidentNumber(member.residentNumber) || '-'}
+소득구분: ${incomeType}
+주소: ${member.address || '-'}
+지급처: ${concert.title}
+지급일: ${concert.date}
+지급기간: ${concert.date}
+
+【 세금 계산 】
+지급총액: ${paymentAmount.toLocaleString()}원
+소득세 (3%): ${wh.incomeTax.toLocaleString()}원
+지방소득세 (1%): ${wh.localTax.toLocaleString()}원
+원천징수액 합계: ${wh.total.toLocaleString()}원
+차인실수령액: ${wh.net.toLocaleString()}원
+
+발급일: ${new Date().toISOString().split('T')[0]}
+본 원천징수영수증은 국세청 홈택스 신고용 공식 문서입니다.
+`;
+        })
+        .filter((t) => t.trim().length > 0)
+        .join('\n\n');
+
+      return receipts;
     }
 
     return '문서 생성 중...';
@@ -673,21 +724,42 @@ ${concert.title}
             <p className="text-sm font-semibold text-gray-700 mb-2">저장된 문서</p>
             <div className="space-y-1.5">
               {savedDocs.map((d) => (
-                <div
+                <button
                   key={d.id}
-                  className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs flex items-center justify-between"
+                  onClick={() => {
+                    setSelectedType(d.type);
+                    setPreview(d.content || '');
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs flex items-center justify-between hover:bg-blue-50 hover:border-blue-300 transition-colors group"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-800 truncate">{d.title}</p>
+                    <p className="font-medium text-gray-800 truncate group-hover:text-blue-700">{d.title}</p>
                     <p className="text-[10px] text-gray-400">{d.type}</p>
                   </div>
-                  <button
-                    onClick={() => handleDelete(d.id)}
-                    className="text-gray-300 hover:text-red-500 ml-1"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
+                  <div className="flex gap-1 ml-1 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingDocId(d.id);
+                        setEditingTitle(d.title);
+                      }}
+                      className="text-gray-300 hover:text-blue-500"
+                      title="편집"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(d.id);
+                      }}
+                      className="text-gray-300 hover:text-red-500"
+                      title="삭제"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </button>
               ))}
             </div>
           </div>
@@ -741,7 +813,7 @@ ${concert.title}
           )}
         </div>
 
-        <div className="card flex-1 p-5 overflow-y-auto">
+        <div className="card flex-1 p-5 overflow-y-auto flex flex-col">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-gray-400">생성 중...</div>
           ) : selectedType === '단원모집공고문' ? (
@@ -751,11 +823,60 @@ ${concert.title}
           ) : selectedType === '견적서' ? (
             <EstimateBuilder concertId={concertId} />
           ) : selectedType === '원천징수영수증' ? (
-            <WithholdingReceiptBuilder concert={concert} concertId={concertId} />
+            <WithholdingReceiptPreview concert={concert} concertId={concertId} />
           ) : preview ? (
-            <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
-              {preview}
-            </pre>
+            <div className="flex flex-col flex-1 min-h-0">
+              {isEditingContent ? (
+                <>
+                  <textarea
+                    value={editingContent}
+                    onChange={(e) => setEditingContent(e.target.value)}
+                    className="flex-1 p-3 border border-gray-300 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={async () => {
+                        // 현재 선택된 저장된 문서가 있으면 업데이트
+                        const selectedDoc = savedDocs.find((d) => d.content === preview);
+                        if (selectedDoc) {
+                          await updateDocument(selectedDoc.id, { content: editingContent });
+                          loadSaved();
+                        }
+                        setPreview(editingContent);
+                        setIsEditingContent(false);
+                      }}
+                      className="btn-primary text-xs"
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingContent(false);
+                        setEditingContent('');
+                      }}
+                      className="btn-secondary text-xs"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed flex-1">
+                    {preview}
+                  </pre>
+                  <button
+                    onClick={() => {
+                      setIsEditingContent(true);
+                      setEditingContent(preview);
+                    }}
+                    className="btn-secondary text-xs mt-3 w-fit"
+                  >
+                    <Edit2 size={12} /> 편집
+                  </button>
+                </>
+              )}
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-32 text-gray-400">
               <FileText size={32} className="mb-2 opacity-30" />
@@ -798,16 +919,60 @@ ${concert.title}
               autoComplete="off"
               className="input"
               value={docTitle}
-              onChange={(e) => {
-                e.preventDefault();
-                setDocTitle(e.target.value);
-              }}
+              onChange={(e) => setDocTitle(e.target.value)}
               placeholder={concert.title + ' ' + selectedType}
               autoFocus
             />
             <p className="text-xs text-gray-500 mt-2">
               현재 미리보기 내용을 이 연주회의 문서 목록에 저장합니다.
             </p>
+          </div>
+        </Modal>
+      )}
+
+      {editingDocId && (
+        <Modal
+          title="문서 편집"
+          onClose={() => {
+            setEditingDocId(null);
+            setEditingTitle('');
+          }}
+          size="sm"
+          footer={
+            <>
+              <button className="btn-secondary" onClick={() => {
+                setEditingDocId(null);
+                setEditingTitle('');
+              }}>
+                취소
+              </button>
+              <button className="btn-primary" onClick={async () => {
+                if (!editingTitle.trim()) {
+                  alert('문서 제목을 입력하세요.');
+                  return;
+                }
+                await updateDocument(editingDocId, {
+                  title: editingTitle.trim(),
+                });
+                setEditingDocId(null);
+                setEditingTitle('');
+                loadSaved();
+              }}>
+                저장
+              </button>
+            </>
+          }
+        >
+          <div>
+            <label className="label">문서 제목</label>
+            <input
+              type="text"
+              autoComplete="off"
+              className="input"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              autoFocus
+            />
           </div>
         </Modal>
       )}
@@ -1277,8 +1442,135 @@ function EstimateBuilder({ concertId }: { concertId: string }) {
   );
 }
 
-// 원천징수영수증 빌더
-function WithholdingReceiptBuilder({ concert, concertId }: { concert: Concert; concertId: string }) {
+// 원천징수영수증 미리보기 (데이터 다시 로드 안함)
+function WithholdingReceiptPreview({ concert, concertId }: { concert: Concert; concertId: string }) {
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={async () => {
+          const [concertMembers, allMembers] = await Promise.all([
+            getConcertMembers(concertId),
+            getAllMembers(),
+          ]);
+          const html = getReceiptHTML(concertMembers, allMembers);
+          const w = window.open();
+          w!.document.write(html);
+          w!.document.close();
+          setTimeout(() => w!.print(), 250);
+        }}
+        className="btn-secondary w-full"
+      >
+        <FileDown size={14} /> 인쇄
+      </button>
+    </div>
+  );
+
+  function getReceiptHTML(concertMembers: any[], allMembers: Member[]) {
+    const receipts = concertMembers
+      .map((cm) => {
+        const member = allMembers.find((m) => m.id === cm.memberId);
+        if (!member) return '';
+
+        const baseFee = Number(cm.fee) || Number(member.baseFee) || 0;
+        const extra = Number(cm.feeExtra) || 0;
+        const deduction = Number(cm.feeDeduction) || 0;
+        const paymentAmount = Math.max(0, baseFee + extra - deduction);
+
+        if (paymentAmount === 0) return '';
+
+        const incomeType = member.incomeType ?? '사업소득';
+        const wh = calcWithholding(paymentAmount, incomeType as '사업소득' | '기타소득');
+
+        return `
+        <div style="page-break-after: always; padding: 40px; border: 1px solid #999; margin: 20px 0; font-family: 'Noto Sans KR', serif;">
+          <h3 style="text-align: center; margin-bottom: 30px; font-size: 16px; font-weight: bold;">
+            거주자의 ${incomeType === '사업소득' ? '사업소득' : '기타소득'} 원천징수영수증
+          </h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px; width: 30%;"><strong>소득자명</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${member.name}</td>
+              <td style="border: 1px solid #ccc; padding: 8px; width: 30%;"><strong>주민등록번호</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${maskResidentNumber(member.residentNumber)}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>소득구분</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${incomeType}</td>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>주소</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${member.address || '-'}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지급처</strong></td>
+              <td colspan="3" style="border: 1px solid #ccc; padding: 8px;">${concert.title}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지급일</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${concert.date}</td>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지급기간</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px;">${concert.date}</td>
+            </tr>
+          </table>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr style="background-color: #f0f0f0;">
+              <td style="border: 1px solid #ccc; padding: 8px; width: 50%;"><strong>지급총액</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${paymentAmount.toLocaleString()}원</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>소득세</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.incomeTax.toLocaleString()}원</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>지방소득세</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.localTax.toLocaleString()}원</td>
+            </tr>
+            <tr style="background-color: #e8f4f8; font-weight: bold;">
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>원천징수액 합계</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.total.toLocaleString()}원</td>
+            </tr>
+            <tr style="background-color: #f9f9f9; font-weight: bold; font-size: 15px;">
+              <td style="border: 1px solid #ccc; padding: 8px;"><strong>차인실수령액</strong></td>
+              <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${wh.net.toLocaleString()}원</td>
+            </tr>
+          </table>
+
+          <div style="margin-top: 30px; font-size: 12px; color: #666;">
+            <p>본 원천징수영수증은 국세청 홈택스 신고용 공식 문서입니다.</p>
+            <p style="margin-top: 5px;">발급일: ${new Date().toISOString().split('T')[0]}</p>
+          </div>
+        </div>
+        `;
+      })
+      .join('');
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+      <style>
+        body { margin: 0; padding: 20px; font-family: 'Noto Sans KR', serif; }
+      </style>
+    </head>
+    <body>
+      ${receipts}
+    </body>
+    </html>
+    `;
+  }
+}
+
+// 원천징수영수증 빌더 (generateDocument에서만 호출)
+function WithholdingReceiptBuilder({
+  concert,
+  concertId,
+  onPreviewChange
+}: {
+  concert: Concert;
+  concertId: string;
+  onPreviewChange?: (preview: string) => void;
+}) {
   const [cms, setCms] = useState<any[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
 
@@ -1290,9 +1582,106 @@ function WithholdingReceiptBuilder({ concert, concertId }: { concert: Concert; c
       ]);
       setCms(concertMembers);
       setMembers(allMembers);
+
+      // 데이터 로드 후 미리보기 생성
+      if (onPreviewChange) {
+        const text = getReceiptTextWithData(concertMembers, allMembers);
+        onPreviewChange(text);
+      }
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [concertId]);
+
+  const getReceiptTextWithData = (concertMembers: any[], allMembers: Member[]) => {
+    return concertMembers
+      .map((cm) => {
+        const member = allMembers.find((m) => m.id === cm.memberId);
+        if (!member) return '';
+
+        const baseFee = Number(cm.fee) || Number(member.baseFee) || 0;
+        const extra = Number(cm.feeExtra) || 0;
+        const deduction = Number(cm.feeDeduction) || 0;
+        const paymentAmount = Math.max(0, baseFee + extra - deduction);
+
+        if (paymentAmount === 0) return '';
+
+        const incomeType = member.incomeType ?? '사업소득';
+        const wh = calcWithholding(paymentAmount, incomeType as '사업소득' | '기타소득');
+
+        return `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+거주자의 ${incomeType} 원천징수영수증
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【 기본정보 】
+소득자명: ${member.name}
+주민등록번호: ${maskResidentNumber(member.residentNumber) || '-'}
+소득구분: ${incomeType}
+주소: ${member.address || '-'}
+지급처: ${concert.title}
+지급일: ${concert.date}
+지급기간: ${concert.date}
+
+【 세금 계산 】
+지급총액: ${paymentAmount.toLocaleString()}원
+소득세 (3%): ${wh.incomeTax.toLocaleString()}원
+지방소득세 (1%): ${wh.localTax.toLocaleString()}원
+원천징수액 합계: ${wh.total.toLocaleString()}원
+차인실수령액: ${wh.net.toLocaleString()}원
+
+발급일: ${new Date().toISOString().split('T')[0]}
+본 원천징수영수증은 국세청 홈택스 신고용 공식 문서입니다.
+`;
+      })
+      .filter((t) => t.trim().length > 0)
+      .join('\n\n');
+  };
+
+  const getReceiptText = () => {
+    return cms
+      .map((cm) => {
+        const member = members.find((m) => m.id === cm.memberId);
+        if (!member) return '';
+
+        const baseFee = Number(cm.fee) || Number(member.baseFee) || 0;
+        const extra = Number(cm.feeExtra) || 0;
+        const deduction = Number(cm.feeDeduction) || 0;
+        const paymentAmount = Math.max(0, baseFee + extra - deduction);
+
+        if (paymentAmount === 0) return '';
+
+        const incomeType = member.incomeType ?? '사업소득';
+        const wh = calcWithholding(paymentAmount, incomeType as '사업소득' | '기타소득');
+
+        return `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+거주자의 ${incomeType} 원천징수영수증
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【 기본정보 】
+소득자명: ${member.name}
+주민등록번호: ${maskResidentNumber(member.residentNumber) || '-'}
+소득구분: ${incomeType}
+주소: ${member.address || '-'}
+지급처: ${concert.title}
+지급일: ${concert.date}
+지급기간: ${concert.date}
+
+【 세금 계산 】
+지급총액: ${paymentAmount.toLocaleString()}원
+소득세 (3%): ${wh.incomeTax.toLocaleString()}원
+지방소득세 (1%): ${wh.localTax.toLocaleString()}원
+원천징수액 합계: ${wh.total.toLocaleString()}원
+차인실수령액: ${wh.net.toLocaleString()}원
+
+발급일: ${new Date().toISOString().split('T')[0]}
+본 원천징수영수증은 국세청 홈택스 신고용 공식 문서입니다.
+`;
+      })
+      .filter((t) => t.trim().length > 0)
+      .join('\n\n');
+  };
 
   const getReceiptHTML = () => {
     const receipts = cms
@@ -1300,10 +1689,13 @@ function WithholdingReceiptBuilder({ concert, concertId }: { concert: Concert; c
         const member = members.find((m) => m.id === cm.memberId);
         if (!member) return '';
 
-        const baseFee = cm.fee ?? member.baseFee ?? 0;
-        const extra = cm.feeExtra ?? 0;
-        const deduction = cm.feeDeduction ?? 0;
-        const paymentAmount = baseFee + extra - deduction;
+        const baseFee = Number(cm.fee) || Number(member.baseFee) || 0;
+        const extra = Number(cm.feeExtra) || 0;
+        const deduction = Number(cm.feeDeduction) || 0;
+        const paymentAmount = Math.max(0, baseFee + extra - deduction);
+
+        if (paymentAmount === 0) return '';
+
         const incomeType = member.incomeType ?? '사업소득';
         const wh = calcWithholding(paymentAmount, incomeType as '사업소득' | '기타소득');
 
