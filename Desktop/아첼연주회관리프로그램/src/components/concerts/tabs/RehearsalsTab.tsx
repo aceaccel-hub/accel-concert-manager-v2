@@ -1,6 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Trash2, Edit2, Users, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Users, X, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type {
   Rehearsal,
   RehearsalType,
@@ -249,6 +266,93 @@ function RehearsalCard({
   );
 }
 
+function SortableTargetPieceItem({
+  piece,
+  onRemove,
+}: {
+  piece: string;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: piece,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100"
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-center text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={16} />
+      </span>
+      <span className="text-sm text-gray-700 flex-1">{piece}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-gray-400 hover:text-red-600"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+function SortableTargetPieces({
+  pieces,
+  onChange,
+  onRemove,
+}: {
+  pieces: string[];
+  onChange: (pieces: string[]) => void;
+  onRemove: (piece: string) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIdx = pieces.indexOf(active.id as string);
+    const newIdx = pieces.indexOf(over.id as string);
+    const reordered = arrayMove(pieces, oldIdx, newIdx);
+    onChange(reordered);
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={pieces} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2">
+          {pieces.map((piece) => (
+            <SortableTargetPieceItem
+              key={piece}
+              piece={piece}
+              onRemove={() => onRemove(piece)}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 function RehearsalForm({
   concertId,
   item,
@@ -271,7 +375,6 @@ function RehearsalForm({
     memo: '',
     dressCode: '',
     equipmentMemo: '',
-    conductorEvaluation: '' as Evaluation | '',
     nextTask: '',
   });
   const [showPiecesPicker, setShowPiecesPicker] = useState(false);
@@ -297,7 +400,6 @@ function RehearsalForm({
         memo: item.memo ?? '',
         dressCode: item.dressCode ?? '',
         equipmentMemo: item.equipmentMemo ?? '',
-        conductorEvaluation: (item.conductorEvaluation ?? '') as Evaluation | '',
         nextTask: item.nextTask ?? '',
       });
     }
@@ -320,7 +422,6 @@ function RehearsalForm({
       memo: form.memo,
       dressCode: form.dressCode,
       equipmentMemo: form.equipmentMemo,
-      conductorEvaluation: (form.conductorEvaluation || undefined) as Evaluation | undefined,
       nextTask: form.nextTask,
     };
     if (item) {
@@ -399,51 +500,27 @@ function RehearsalForm({
         <div className="col-span-2">
           <label className="label">대상 곡목</label>
           <p className="text-xs text-gray-500 mb-2">{form.targetPieces.length}개 선택됨</p>
-          <button
-            type="button"
-            onClick={() => setShowPiecesPicker(true)}
-            className="w-full text-left p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
+          <div className="border border-gray-300 rounded-lg p-3 space-y-2 bg-white">
             {form.targetPieces.length > 0 ? (
-              <div className="space-y-1">
-                {form.targetPieces.map((piece) => (
-                  <div key={piece} className="text-sm text-gray-700 flex items-center justify-between">
-                    <span>{piece}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setForm((f) => ({
-                          ...f,
-                          targetPieces: f.targetPieces.filter((p) => p !== piece),
-                        }));
-                      }}
-                      className="text-gray-400 hover:text-red-600"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <SortableTargetPieces
+                pieces={form.targetPieces}
+                onChange={(newPieces) => setForm((f) => ({ ...f, targetPieces: newPieces }))}
+                onRemove={(piece) => setForm((f) => ({
+                  ...f,
+                  targetPieces: f.targetPieces.filter((p) => p !== piece),
+                }))}
+              />
             ) : (
               <span className="text-sm text-gray-400">곡목을 선택하세요</span>
             )}
-          </button>
-        </div>
-        <div>
-          <label className="label">지휘자 평가</label>
-          <select
-            className="input"
-            value={form.conductorEvaluation}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, conductorEvaluation: e.target.value as Evaluation | '' }))
-            }
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPiecesPicker(true)}
+            className="w-full mt-2 text-center py-2 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
           >
-            <option value="">선택 안 함</option>
-            {(['상', '중', '하'] as Evaluation[]).map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
+            곡목 추가/편집
+          </button>
         </div>
         <div>
           <label className="label">다음 연습 과제</label>
