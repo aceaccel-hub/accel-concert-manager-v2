@@ -789,10 +789,12 @@ ${concert.title}
           <div>
             <label className="label">문서 제목</label>
             <input
+              type="text"
               className="input"
               value={docTitle}
               onChange={(e) => setDocTitle(e.target.value)}
-              placeholder={`${concert.title} ${selectedType}`}
+              placeholder={concert.title + ' ' + selectedType}
+              autoFocus
             />
             <p className="text-xs text-gray-500 mt-2">
               현재 미리보기 내용을 이 연주회의 문서 목록에 저장합니다.
