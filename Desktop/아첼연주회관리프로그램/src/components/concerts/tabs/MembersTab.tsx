@@ -281,14 +281,9 @@ function MemberRow({
         </button>
       </td>
       <td className="px-4 py-3 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <button onClick={onEdit} className="text-xs px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200">
-            수정
-          </button>
-          <button onClick={onRemove} className="text-gray-400 hover:text-red-600">
-            <Trash2 size={14} />
-          </button>
-        </div>
+        <button onClick={onRemove} className="text-gray-400 hover:text-red-600">
+          <Trash2 size={14} />
+        </button>
       </td>
     </tr>
   );
