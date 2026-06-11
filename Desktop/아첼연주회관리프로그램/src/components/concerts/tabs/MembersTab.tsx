@@ -1,11 +1,6 @@
-/**
- * 단원 탭
- * - 인라인 수정: 행 우측 [수정] 버튼 → 해당 행이 입력 필드로 전환
- * - A/B/C 등급 배지: 이름 옆 클릭 시 드롭다운으로 변경
- */
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Trash2, UserPlus, Save, X } from 'lucide-react';
+import { Plus, Trash2, UserPlus } from 'lucide-react';
 import type { ConcertMember, Member, MemberRole } from '../../../types';
 import Modal from '../../common/Modal';
 import Combobox from '../../common/Combobox';
@@ -24,7 +19,6 @@ import type { ConcertTabContext } from '../ConcertDetail';
 
 type ConcertMemberFull = ConcertMember & { member: Member };
 
-// ---------- A/B/C 등급 배지 ----------
 const ABILITY_GRADE_COLORS: Record<string, string> = {
   A: 'bg-blue-100 text-blue-700 border-blue-200',
   B: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -85,19 +79,14 @@ function AbilityGradeBadge({
   );
 }
 
-// ---------- 인라인 수정 행 ----------
-function EditableRow({
+function EditModal({
   cm,
+  onClose,
   onSaved,
-  onCancel,
-  onRemove,
-  onReload,
 }: {
   cm: ConcertMemberFull;
+  onClose: () => void;
   onSaved: () => void;
-  onCancel: () => void;
-  onRemove: (cm: ConcertMemberFull) => void;
-  onReload: () => void;
 }) {
   const [part, setPart] = useState(cm.part || cm.member?.part || '');
   const [role, setRole] = useState<MemberRole>(
@@ -110,21 +99,7 @@ function EditableRow({
   const [bankName, setBankName] = useState(cm.bankName || cm.member?.bankName || '');
   const [attendanceRate, setAttendanceRate] = useState(cm.attendanceRate ?? 0);
 
-  // cm이 변경될 때마다 state 초기화
-  useEffect(() => {
-    setPart(cm.part || cm.member?.part || '');
-    setRole((cm.role as MemberRole) || cm.member?.role || '일반단원');
-    setPhone(cm.phone || cm.member?.phone || '');
-    setFee(cm.fee ?? cm.member?.baseFee ?? 0);
-    setBankAccount(cm.bankAccount || cm.member?.bankAccount || '');
-    setResidentNumber(cm.residentNumber || cm.member?.residentNumber || '');
-    setBankName(cm.bankName || cm.member?.bankName || '');
-    setAttendanceRate(cm.attendanceRate ?? 0);
-  }, [cm]);
-
   const handleSave = async () => {
-    // 해당 연주회에서만 단원 정보 업데이트 (ConcertMember만 수정)
-    // 마스터 정보(Member)는 변경하지 않음
     await db.concertMembers.update(cm.id, {
       part,
       role,
@@ -136,7 +111,6 @@ function EditableRow({
       bankAccount,
     });
 
-    // Budget 항목도 함께 업데이트 (연주회별 사례비 반영)
     if (cm.member?.name) {
       try {
         const budgetTitle = `${cm.member.name} 사례비`;
@@ -147,10 +121,8 @@ function EditableRow({
           .toArray();
 
         if (budgets.length > 0) {
-          // 기존 Budget 업데이트
           await db.budgets.update(budgets[0].id, { plannedAmount: fee });
         } else if (fee > 0) {
-          // 없으면 새로 생성
           await db.budgets.add({
             id: crypto.randomUUID(),
             concertId: cm.concertId,
@@ -173,115 +145,88 @@ function EditableRow({
   };
 
   return (
-    <tr className="bg-blue-50 border-l-4 border-l-[#2563eb]">
-      <td className="px-3 py-2">
-        <div className="flex gap-1">
-          <button onClick={handleSave} className="btn-primary text-xs py-1 px-2" title="저장">
-            <Save size={12} /> 저장
-          </button>
-          <button onClick={onCancel} className="btn-secondary text-xs py-1 px-2" title="취소">
-            <X size={12} />
-          </button>
+    <Modal
+      title={`${cm.member?.name} 수정`}
+      onClose={onClose}
+      size="md"
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose}>취소</button>
+          <button className="btn-primary" onClick={handleSave}>저장</button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">이름</label>
+            <input className="input opacity-50 cursor-not-allowed" value={cm.member?.name || ''} disabled />
+          </div>
+          <div>
+            <label className="label">악기</label>
+            <input className="input opacity-50 cursor-not-allowed" value={cm.member?.instrument || ''} disabled />
+          </div>
         </div>
-      </td>
-      <td className="px-4 py-2 font-medium text-gray-900 text-sm whitespace-nowrap">
-        {cm.member?.name}
-        <AbilityGradeBadge
-          memberId={cm.member?.id ?? ''}
-          grade={cm.member?.abilityGrade}
-          onChanged={onReload}
-        />
-      </td>
-      <td className="px-4 py-2 text-gray-600 text-sm">{cm.member?.instrument || '-'}</td>
-      <td className="px-3 py-2">
-        <Combobox
-          category="part"
-          value={part}
-          onChange={(value) => setPart(value)}
-          placeholder="파트"
-          defaultOptions={['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Flute', 'Oboe', 'Clarinet', 'Bassoon']}
-        />
-      </td>
-      <td className="px-3 py-2">
-        <select
-          className="input text-xs py-1 px-2 w-28"
-          value={role}
-          onChange={(e) => setRole(e.target.value as MemberRole)}
-        >
-          {(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map(
-            (r) => <option key={r}>{r}</option>
-          )}
-        </select>
-      </td>
-      <td className="px-3 py-2">
-        <input
-          className="input text-xs py-1 px-2 w-28"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="연락처"
-        />
-      </td>
-      <td className="px-3 py-2">
-        <input
-          className="input text-xs py-1 px-2 w-32"
-          value={residentNumber}
-          onChange={(e) => setResidentNumber(e.target.value)}
-          placeholder="주민등록번호"
-        />
-      </td>
-      <td className="px-3 py-2">
-        <input
-          type="number"
-          className="input text-xs py-1 px-2 w-20 text-center"
-          value={attendanceRate}
-          onChange={(e) => setAttendanceRate(+e.target.value)}
-          placeholder="출석률"
-          min="0"
-          max="100"
-        />
-      </td>
-      <td className="px-3 py-2 text-right">
-        <input
-          type="number"
-          className="input text-xs py-1 px-2 w-24 text-right"
-          value={fee}
-          onChange={(e) => setFee(+e.target.value)}
-        />
-      </td>
-      <td className="px-3 py-2">
-        <input
-          className="input text-xs py-1 px-2 w-24"
-          value={bankName}
-          onChange={(e) => setBankName(e.target.value)}
-          placeholder="은행명"
-        />
-      </td>
-      <td className="px-3 py-2">
-        <input
-          className="input text-xs py-1 px-2 w-32"
-          value={bankAccount}
-          onChange={(e) => setBankAccount(e.target.value)}
-          placeholder="계좌번호"
-        />
-      </td>
-      <td className="px-4 py-2 text-center">
-        <button
-          onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onSaved)}
-          className={`text-xs px-2 py-0.5 rounded-full border ${
-            cm.isReserve
-              ? 'bg-orange-50 text-orange-600 border-orange-200'
-              : 'bg-gray-50 text-gray-400 border-gray-200'
-          }`}
-        >
-          {cm.isReserve ? '예비' : '정'}
-        </button>
-      </td>
-    </tr>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">파트</label>
+            <Combobox
+              category="part"
+              value={part}
+              onChange={setPart}
+              placeholder="파트"
+              defaultOptions={['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Flute', 'Oboe', 'Clarinet', 'Bassoon']}
+            />
+          </div>
+          <div>
+            <label className="label">역할</label>
+            <select className="input" value={role} onChange={(e) => setRole(e.target.value as MemberRole)}>
+              {(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">연락처</label>
+            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-0000-0000" />
+          </div>
+          <div>
+            <label className="label">주민등록번호</label>
+            <input className="input" value={residentNumber} onChange={(e) => setResidentNumber(e.target.value)} placeholder="000000-0000000" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">출석률 (%)</label>
+            <input type="number" className="input" value={attendanceRate} onChange={(e) => setAttendanceRate(+e.target.value)} min="0" max="100" />
+          </div>
+          <div>
+            <label className="label">사례비 (원)</label>
+            <input type="number" className="input" value={fee} onChange={(e) => setFee(+e.target.value)} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">은행명</label>
+            <input className="input" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="국민은행" />
+          </div>
+          <div>
+            <label className="label">계좌번호</label>
+            <input className="input" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="123-456-789012" />
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
-// ---------- 읽기 전용 행 ----------
-function ReadonlyRow({
+function MemberRow({
   cm,
   onEdit,
   onRemove,
@@ -289,7 +234,7 @@ function ReadonlyRow({
 }: {
   cm: ConcertMemberFull;
   onEdit: () => void;
-  onRemove: (cm: ConcertMemberFull) => void;
+  onRemove: () => void;
   onReload: () => void;
 }) {
   const partColors: Record<string, string> = {
@@ -304,51 +249,43 @@ function ReadonlyRow({
 
   return (
     <tr className={`hover:bg-gray-50 ${cm.isReserve ? 'opacity-60' : ''}`}>
-      <td className="px-3 py-3"></td>
       <td className="px-4 py-3 font-medium text-gray-900 text-sm">
         <div className="flex items-center gap-1.5">
-          {cm.member?.name || '(알 수 없음)'}
-          <AbilityGradeBadge
-            memberId={cm.member?.id ?? ''}
-            grade={cm.member?.abilityGrade}
-            onChanged={onReload}
-          />
+          {cm.member?.name}
+          <AbilityGradeBadge memberId={cm.member?.id ?? ''} grade={cm.member?.abilityGrade} onChanged={onReload} />
         </div>
       </td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.instrument || '-'}</td>
       <td className="px-4 py-3">
         <span className={`badge text-xs ${partColor}`}>{part}</span>
       </td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{cm.role || cm.member?.role || '-'}</td>
-      <td className="px-4 py-3 text-gray-500 text-xs">{cm.member?.phone || '-'}</td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.residentNumber || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.role || '-'}</td>
+      <td className="px-4 py-3 text-gray-500 text-xs">{cm.phone || cm.member?.phone || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.residentNumber || cm.member?.residentNumber || '-'}</td>
       <td className="px-4 py-3 text-center text-gray-600 text-sm">
         {cm.attendanceRate != null ? `${cm.attendanceRate}%` : '-'}
       </td>
       <td className="px-4 py-3 text-right text-gray-700 text-sm">
         {cm.fee ? `${cm.fee.toLocaleString()}원` : '-'}
       </td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.bankName || '-'}</td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.bankAccount || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.bankName || cm.member?.bankName || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{cm.bankAccount || cm.member?.bankAccount || '-'}</td>
+      <td className="px-4 py-3 text-center">
+        <button
+          onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onReload)}
+          className={`text-xs px-2 py-0.5 rounded-full border ${
+            cm.isReserve ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200'
+          }`}
+        >
+          {cm.isReserve ? '예비' : '정'}
+        </button>
+      </td>
       <td className="px-4 py-3 text-center">
         <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => toggleReserveStatus(cm.id, !cm.isReserve).then(onReload)}
-            className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-              cm.isReserve
-                ? 'bg-orange-50 text-orange-600 border-orange-200'
-                : 'bg-gray-50 text-gray-400 border-gray-200'
-            }`}
-          >
-            {cm.isReserve ? '예비' : '정'}
-          </button>
-          <button
-            onClick={onEdit}
-            className="text-xs px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
-          >
+          <button onClick={onEdit} className="text-xs px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200">
             수정
           </button>
-          <button onClick={() => onRemove(cm)} className="text-gray-400 hover:text-red-600">
+          <button onClick={onRemove} className="text-gray-400 hover:text-red-600">
             <Trash2 size={14} />
           </button>
         </div>
@@ -357,7 +294,6 @@ function ReadonlyRow({
   );
 }
 
-// ---------- 메인 탭 ----------
 export default function MembersTab() {
   const { concert } = useOutletContext<ConcertTabContext>();
   const concertId = concert.id;
@@ -368,7 +304,7 @@ export default function MembersTab() {
   const [showNewMember, setShowNewMember] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ConcertMemberFull | null>(null);
   const [reserveFilter, setReserveFilter] = useState<'전체' | '정단원' | '예비단원'>('전체');
-  const [editingId, setEditingId] = useState<string | null>(null); // 현재 편집 중인 concertMember.id
+  const [editTarget, setEditTarget] = useState<ConcertMemberFull | null>(null);
 
   const load = async () => {
     const [cms, all] = await Promise.all([getConcertMembers(concertId), getAllMembers()]);
@@ -378,7 +314,6 @@ export default function MembersTab() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [concertId]);
 
   const handleRemove = async () => {
@@ -388,7 +323,6 @@ export default function MembersTab() {
     load();
   };
 
-  // 파트별 집계
   const groupByPart: Record<string, ConcertMemberFull[]> = {};
   concertMembers.forEach((cm) => {
     const part = cm.part || cm.member?.part || '기타';
@@ -424,7 +358,6 @@ export default function MembersTab() {
         </div>
       </div>
 
-      {/* 파트별 집계 + 필터 */}
       <div className="flex flex-wrap items-center gap-2">
         {Object.entries(groupByPart).map(([part, mbs]) => (
           <span key={part} className="badge bg-gray-100 text-gray-600">
@@ -432,7 +365,6 @@ export default function MembersTab() {
           </span>
         ))}
         <div className="flex-1" />
-        {/* 등급 범례 */}
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mr-2">
           {(['A', 'B', 'C'] as const).map((g) => (
             <span key={g} className={`px-2 py-0.5 rounded-full border font-semibold ${ABILITY_GRADE_COLORS[g]}`}>
@@ -447,9 +379,7 @@ export default function MembersTab() {
               key={f}
               onClick={() => setReserveFilter(f)}
               className={`text-xs px-3 py-1 rounded-lg border ${
-                reserveFilter === f
-                  ? 'bg-[#2563eb] text-white border-[#2563eb]'
-                  : 'bg-white text-gray-600 border-gray-300'
+                reserveFilter === f ? 'bg-[#2563eb] text-white border-[#2563eb]' : 'bg-white text-gray-600 border-gray-300'
               }`}
             >
               {f}
@@ -478,88 +408,47 @@ export default function MembersTab() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">은행명</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">계좌번호</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">예비</th>
-                <th className="w-28 px-3 py-3" />
+                <th className="w-32 px-3 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((cm) =>
-                editingId === cm.id ? (
-                  <EditableRow
-                    key={cm.id}
-                    cm={cm}
-                    onSaved={() => {
-                      setEditingId(null);
-                      load();
-                    }}
-                    onCancel={() => setEditingId(null)}
-                    onRemove={setRemoveTarget}
-                    onReload={load}
-                  />
-                ) : (
-                  <ReadonlyRow
-                    key={cm.id}
-                    cm={cm}
-                    onEdit={() => setEditingId(cm.id)}
-                    onRemove={setRemoveTarget}
-                    onReload={load}
-                  />
-                )
-              )}
+              {filtered.map((cm) => (
+                <MemberRow
+                  key={cm.id}
+                  cm={cm}
+                  onEdit={() => setEditTarget(cm)}
+                  onRemove={() => setRemoveTarget(cm)}
+                  onReload={load}
+                />
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
       {showAdd && (
-        <AddMemberFromDB
-          concertId={concertId}
-          existing={concertMembers.map((cm) => cm.memberId)}
-          allMembers={allMembers}
-          onClose={() => setShowAdd(false)}
-          onSaved={() => { load(); setShowAdd(false); }}
-        />
+        <AddMemberFromDB concertId={concertId} existing={concertMembers.map((cm) => cm.memberId)} allMembers={allMembers} onClose={() => setShowAdd(false)} onSaved={() => { load(); setShowAdd(false); }} />
       )}
 
-      {showNewMember && (
-        <NewMemberForm
-          concertId={concertId}
-          onClose={() => setShowNewMember(false)}
-          onSaved={() => { load(); setShowNewMember(false); }}
-        />
-      )}
+      {showNewMember && <NewMemberForm concertId={concertId} onClose={() => setShowNewMember(false)} onSaved={() => { load(); setShowNewMember(false); }} />}
 
       {removeTarget && (
-        <Modal
-          title="단원 제외"
-          onClose={() => setRemoveTarget(null)}
-          size="sm"
-          footer={
-            <>
-              <button className="btn-secondary" onClick={() => setRemoveTarget(null)}>취소</button>
-              <button className="btn-danger" onClick={handleRemove}>제외</button>
-            </>
-          }
-        >
+        <Modal title="단원 제외" onClose={() => setRemoveTarget(null)} size="sm" footer={<><button className="btn-secondary" onClick={() => setRemoveTarget(null)}>취소</button><button className="btn-danger" onClick={handleRemove}>제외</button></>}>
           <p className="text-sm text-gray-700">
             <span className="font-semibold">{removeTarget.member?.name}</span> 단원을 이 연주회에서 제외하시겠습니까?
           </p>
           <p className="text-xs text-gray-500 mt-2">전체 단원 DB에서는 삭제되지 않습니다.</p>
         </Modal>
       )}
+
+      {editTarget && <EditModal cm={editTarget} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); load(); }} />}
     </div>
   );
 }
 
-function AddMemberFromDB({
-  concertId, existing, allMembers, onClose, onSaved,
-}: {
-  concertId: string; existing: string[]; allMembers: Member[];
-  onClose: () => void; onSaved: () => void;
-}) {
+function AddMemberFromDB({ concertId, existing, allMembers, onClose, onSaved }: { concertId: string; existing: string[]; allMembers: Member[]; onClose: () => void; onSaved: () => void }) {
   const available = allMembers.filter((m) => !existing.includes(m.id));
   const [selected, setSelected] = useState<string[]>([]);
-  const toggle = (id: string) =>
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   const handleAdd = async () => {
     for (const memberId of selected) {
@@ -575,19 +464,7 @@ function AddMemberFromDB({
   };
 
   return (
-    <Modal
-      title="단원 DB에서 추가"
-      onClose={onClose}
-      size="md"
-      footer={
-        <>
-          <button className="btn-secondary" onClick={onClose}>취소</button>
-          <button className="btn-primary" onClick={handleAdd} disabled={selected.length === 0}>
-            {selected.length}명 추가
-          </button>
-        </>
-      }
-    >
+    <Modal title="단원 DB에서 추가" onClose={onClose} size="md" footer={<><button className="btn-secondary" onClick={onClose}>취소</button><button className="btn-primary" onClick={handleAdd} disabled={selected.length === 0}>{selected.length}명 추가</button></>}>
       {available.length === 0 ? (
         <p className="text-sm text-gray-500">추가할 수 있는 단원이 없습니다.</p>
       ) : (
@@ -595,7 +472,7 @@ function AddMemberFromDB({
           {available.map((m) => (
             <label key={m.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
               <div className="flex items-center gap-3 flex-1">
-                <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} className="rounded" />
+                <input type="checkbox" checked={selected.includes(m.id)} onChange={() => setSelected((s) => (s.includes(m.id) ? s.filter((x) => x !== m.id) : [...s, m.id]))} className="rounded" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">{m.name}</p>
                   <p className="text-xs text-gray-500">{m.instrument} · {m.part} · {m.role}</p>
@@ -624,19 +501,12 @@ function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onC
   };
 
   return (
-    <Modal title="새 단원 추가" onClose={onClose} size="md"
-      footer={<><button className="btn-secondary" onClick={onClose}>취소</button><button className="btn-primary" onClick={handleSave}>저장</button></>}
-    >
+    <Modal title="새 단원 추가" onClose={onClose} size="md" footer={<><button className="btn-secondary" onClick={onClose}>취소</button><button className="btn-primary" onClick={handleSave}>저장</button></>}>
       <div className="grid grid-cols-2 gap-4">
         <div><label className="label">이름 *</label><input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
         <div><label className="label">악기</label><input className="input" value={form.instrument} onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value }))} /></div>
         <div><label className="label">파트</label><input className="input" value={form.part} onChange={(e) => setForm((f) => ({ ...f, part: e.target.value }))} placeholder="Violin 1" /></div>
-        <div>
-          <label className="label">역할</label>
-          <select className="input" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as MemberRole }))}>
-            {(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map((r) => <option key={r}>{r}</option>)}
-          </select>
-        </div>
+        <div><label className="label">역할</label><select className="input" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as MemberRole }))}>{(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map((r) => <option key={r}>{r}</option>)}</select></div>
         <div><label className="label">연락처</label><input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
         <div><label className="label">사례비 (원)</label><input type="number" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: +e.target.value }))} /></div>
       </div>
