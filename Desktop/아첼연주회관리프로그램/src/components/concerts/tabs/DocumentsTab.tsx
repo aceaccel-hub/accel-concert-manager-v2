@@ -772,11 +772,17 @@ ${concert.title}
       {showSave && (
         <Modal
           title="문서 저장"
-          onClose={() => setShowSave(false)}
+          onClose={() => {
+            setShowSave(false);
+            setDocTitle('');
+          }}
           size="sm"
           footer={
             <>
-              <button className="btn-secondary" onClick={() => setShowSave(false)}>
+              <button className="btn-secondary" onClick={() => {
+                setShowSave(false);
+                setDocTitle('');
+              }}>
                 취소
               </button>
               <button className="btn-primary" onClick={handleSave}>
@@ -789,9 +795,13 @@ ${concert.title}
             <label className="label">문서 제목</label>
             <input
               type="text"
+              autoComplete="off"
               className="input"
               value={docTitle}
-              onChange={(e) => setDocTitle(e.target.value)}
+              onChange={(e) => {
+                e.preventDefault();
+                setDocTitle(e.target.value);
+              }}
               placeholder={concert.title + ' ' + selectedType}
               autoFocus
             />
