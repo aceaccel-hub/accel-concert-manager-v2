@@ -103,12 +103,24 @@ function EditableRow({
   const [role, setRole] = useState<MemberRole>(
     (cm.role as MemberRole) || cm.member?.role || '일반단원'
   );
-  const [phone, setPhone] = useState(cm.member?.phone || '');
+  const [phone, setPhone] = useState(cm.phone || cm.member?.phone || '');
   const [fee, setFee] = useState(cm.fee ?? cm.member?.baseFee ?? 0);
-  const [bankAccount, setBankAccount] = useState(cm.member?.bankAccount || '');
-  const [residentNumber, setResidentNumber] = useState(cm.member?.residentNumber || '');
-  const [bankName, setBankName] = useState(cm.member?.bankName || '');
+  const [bankAccount, setBankAccount] = useState(cm.bankAccount || cm.member?.bankAccount || '');
+  const [residentNumber, setResidentNumber] = useState(cm.residentNumber || cm.member?.residentNumber || '');
+  const [bankName, setBankName] = useState(cm.bankName || cm.member?.bankName || '');
   const [attendanceRate, setAttendanceRate] = useState(cm.attendanceRate ?? 0);
+
+  // cm이 변경될 때마다 state 초기화
+  useEffect(() => {
+    setPart(cm.part || cm.member?.part || '');
+    setRole((cm.role as MemberRole) || cm.member?.role || '일반단원');
+    setPhone(cm.phone || cm.member?.phone || '');
+    setFee(cm.fee ?? cm.member?.baseFee ?? 0);
+    setBankAccount(cm.bankAccount || cm.member?.bankAccount || '');
+    setResidentNumber(cm.residentNumber || cm.member?.residentNumber || '');
+    setBankName(cm.bankName || cm.member?.bankName || '');
+    setAttendanceRate(cm.attendanceRate ?? 0);
+  }, [cm]);
 
   const handleSave = async () => {
     // 해당 연주회에서만 단원 정보 업데이트 (ConcertMember만 수정)
