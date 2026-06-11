@@ -236,11 +236,6 @@ function RehearsalCard({
                   ? r.startTime
                   : r.time}
             </span>
-            {r.conductorEvaluation && (
-              <span className="badge bg-yellow-50 text-yellow-700">
-                평가 {r.conductorEvaluation}
-              </span>
-            )}
           </div>
           <p className="text-sm text-gray-600">{r.place}</p>
           {r.targetPieces && r.targetPieces.length > 0 && (
@@ -326,8 +321,10 @@ function SortableTargetPieces({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIdx = pieces.indexOf(active.id as string);
-    const newIdx = pieces.indexOf(over.id as string);
+    const oldIdx = pieces.findIndex((p) => p === active.id);
+    const newIdx = pieces.findIndex((p) => p === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+
     const reordered = arrayMove(pieces, oldIdx, newIdx);
     onChange(reordered);
   };

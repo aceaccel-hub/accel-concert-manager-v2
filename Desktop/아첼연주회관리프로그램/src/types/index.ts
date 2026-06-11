@@ -193,7 +193,6 @@ export interface Rehearsal {
   memo?: string;
   dressCode?: string; // 연주 복장(드레스 코드)
   equipmentMemo?: string; // 지참 준비물
-  conductorEvaluation?: Evaluation;
   nextTask?: string;
   createdAt: string;
 }
