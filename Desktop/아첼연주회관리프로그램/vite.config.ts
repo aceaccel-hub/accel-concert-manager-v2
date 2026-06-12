@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/',
+  base: '/accel-concert-manager-v2/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
