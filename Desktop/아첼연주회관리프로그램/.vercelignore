@@ -1,7 +1,6 @@
-# Prevent scanning parent directories
-.Trash
-../.Trash
-../../.Trash
+# Prevent scanning home directory and parent directories
+**/.Trash
+**/.Trash/**
 
 # Directories
 한국가톨릭문화원
