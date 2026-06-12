@@ -1,8 +1,16 @@
+# Prevent scanning parent directories
+.Trash
+../.Trash
+../../.Trash
+
 # Directories
 한국가톨릭문화원
 아첼 청소년 오케스트라
 _workspace
 .omc
+deploy
+dist\ 2
+dist_backup
 
 # Documentation files
 *.docx
@@ -18,8 +26,9 @@ Vercel*
 # Zips
 *.zip
 
-# Old dist
-dist\ 2
+# Source maps and dev files
+*.map
+.eslintrc*
 
 # OS files
 .DS_Store
