@@ -1,5 +1,5 @@
 // preload.js - Electron 보안 설정
-const { contextBridge } = require('electron');
+import { contextBridge } from 'electron';
 
 contextBridge.exposeInMainWorld('electron', {
   nodeVersion: process.versions.node,

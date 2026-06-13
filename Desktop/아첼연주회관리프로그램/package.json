@@ -61,22 +61,30 @@
       "buildResources": "assets"
     },
     "files": [
-      "dist/**/*",
+      "dist",
       "electron-main.js",
       "preload.js",
-      "node_modules/**/*"
+      "node_modules"
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
-      ]
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName} Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "${productName} Setup ${version}.${ext}"
     }
   }
 }
