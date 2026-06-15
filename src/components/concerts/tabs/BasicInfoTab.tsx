@@ -1,23 +1,20 @@
 import { useEffect, useState } from 'react';
-import { db } from '../../../db/database';
-import type { Concert, Group } from '../../../types';
+import { useOutletContext } from 'react-router-dom';
+import type { Group } from '../../../types';
+import { getConcertGroups } from '../../../hooks/useGroups';
+import { formatDuration } from '../../../utils/calculations';
+import type { ConcertTabContext } from '../ConcertDetail';
 
-interface Props { concert: Concert; onRefresh?: () => void; }
-
-export default function BasicInfoTab({ concert }: Props) {
+export default function BasicInfoTab() {
+  const { concert } = useOutletContext<ConcertTabContext>();
   const [groups, setGroups] = useState<(Group & { role: string })[]>([]);
 
   useEffect(() => {
-    const load = async () => {
-      const cgs = await db.concertGroups.where('concertId').equals(concert.id).toArray();
-      const gs = await db.groups.toArray();
-      setGroups(cgs.map(cg => {
-        const g = gs.find(g => g.id === cg.groupId);
-        return g ? { ...g, role: cg.role } : null;
-      }).filter(Boolean) as (Group & { role: string })[]);
-    };
-    load();
-  }, [concert.id]);
+    if (!concert?.id) return;
+    getConcertGroups(concert.id).then((rows) =>
+      setGroups(rows.map((r) => ({ ...r.group, role: r.role })))
+    );
+  }, [concert?.id]);
 
   return (
     <div className="p-6 max-w-3xl space-y-6">
@@ -32,7 +29,7 @@ export default function BasicInfoTab({ concert }: Props) {
           <Info label="협연자" value={concert.coPerformer || '-'} />
           <Info label="담당자" value={concert.manager || '-'} />
           <Info label="상태" value={concert.status} />
-          <Info label="예상 소요시간" value={concert.expectedDuration ? `${concert.expectedDuration}분` : '-'} />
+          <Info label="예상 소요시간" value={concert.expectedDuration ? formatDuration(concert.expectedDuration) : '-'} />
           <Info label="진행률" value={`${concert.progressRate}%`} />
         </div>
         {concert.note && (
@@ -41,19 +38,25 @@ export default function BasicInfoTab({ concert }: Props) {
             <p className="text-sm text-gray-800 whitespace-pre-line">{concert.note}</p>
           </div>
         )}
+        <p className="text-xs text-gray-400 mt-6">
+          ※ 기본 정보를 수정하려면 상단의 [편집] 버튼을 이용하세요.
+        </p>
       </section>
 
       {groups.length > 0 && (
         <section className="card p-6">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">참여 단체</h2>
           <div className="space-y-3">
-            {groups.map(g => (
-              <div key={g.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+            {groups.map((g) => (
+              <div
+                key={g.id}
+                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+              >
                 <div>
                   <p className="text-sm font-medium text-gray-900">{g.name}</p>
                   <p className="text-xs text-gray-500">{g.type}</p>
                 </div>
-                <span className="badge bg-indigo-50 text-indigo-700">{g.role}</span>
+                <span className="badge bg-blue-50 text-blue-700">{g.role}</span>
               </div>
             ))}
           </div>

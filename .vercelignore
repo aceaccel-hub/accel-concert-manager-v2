@@ -1,0 +1,33 @@
+# Prevent scanning home directory and parent directories
+**/.Trash
+**/.Trash/**
+
+# Directories
+한국가톨릭문화원
+아첼 청소년 오케스트라
+_workspace
+.omc
+deploy
+dist\ 2
+dist_backup
+
+# Documentation files
+*.docx
+*.doc
+*.md
+Vercel*
+
+# Images
+*.png
+*.jpg
+*.jpeg
+
+# Zips
+*.zip
+
+# Source maps and dev files
+*.map
+.eslintrc*
+
+# OS files
+.DS_Store

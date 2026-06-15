@@ -33,7 +33,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: dist/win-unpacked/*.exe
+          path: dist/아첼 연주회 관리 프로그램 Setup.exe
           retention-days: 30
 
       - name: Create Release
