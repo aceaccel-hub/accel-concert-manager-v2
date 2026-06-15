@@ -10,7 +10,18 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+release
 *.local
+
+# Local agent/tool state
+.claude/
+.omc/
+_git-backup-patches/
+
+# Local reference folders
+/ 한국가톨릭문화원/
+/아첼 청소년 오케스트라/
+/심우림 문서/
 
 # Editor directories and files
 .vscode/*
