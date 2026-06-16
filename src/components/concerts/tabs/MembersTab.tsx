@@ -929,7 +929,7 @@ function PositionChartModal({
               <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
                 <p className="text-sm font-semibold text-gray-800">{section.title}</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
                 {section.seats.map((seat) => {
                   const current = seatAssignments[seat.id] ?? '';
                   const selectableMembers = members.filter((cm) => !assignedMemberIds.has(cm.memberId) || cm.memberId === current);
@@ -1102,7 +1102,7 @@ function PositionChart({
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
               <p className="text-sm font-semibold text-gray-800">{section.title}</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
               {section.seats.map((seat) => {
                 const current = seatAssignments[seat.id] ?? '';
                 const selectableMembers = members.filter((cm) => !assignedMemberIds.has(cm.memberId) || cm.memberId === current);
