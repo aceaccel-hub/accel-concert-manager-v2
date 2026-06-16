@@ -616,9 +616,9 @@ export default function MembersTab() {
       return true;
     })
     .sort((a, b) => {
-      // 포지션 차트의 악기 순서를 따름
-      const aInstrument = normalizeInstrumentName(a.member?.instrument || a.instrument);
-      const bInstrument = normalizeInstrumentName(b.member?.instrument || b.instrument);
+      // 포지션 차트의 악기 순서를 따름 (우선순위: 포지션 > 연주회 특화 > 기본)
+      const aInstrument = normalizeInstrumentName(a.assignedInstrument || a.instrument || a.member?.instrument);
+      const bInstrument = normalizeInstrumentName(b.assignedInstrument || b.instrument || b.member?.instrument);
       const aSortIndex = getInstrumentSortIndex(aInstrument);
       const bSortIndex = getInstrumentSortIndex(bInstrument);
       return aSortIndex - bSortIndex;
