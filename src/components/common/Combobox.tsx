@@ -18,6 +18,7 @@ interface ComboboxProps {
   onChange: (value: string) => void;
   placeholder?: string;
   defaultOptions: string[];
+  disabled?: boolean;
 }
 
 export default function Combobox({
@@ -26,6 +27,7 @@ export default function Combobox({
   onChange,
   placeholder = '입력하거나 선택하세요',
   defaultOptions,
+  disabled = false,
 }: ComboboxProps) {
   const [items, setItems] = useState<string[]>([]);
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
@@ -48,7 +50,12 @@ export default function Combobox({
     const saved = await db.masterItems.where('category').equals(category).toArray();
     const savedValues = saved.map((item) => item.value);
     setSavedItems(new Set(savedValues));
-    const unique = Array.from(new Set([...defaultOptions, ...savedValues]));
+
+    // defaultOptions이 있으면 표준 선택지만 사용, 없으면 DB 저장값과 함께 표시
+    const unique = defaultOptions.length > 0
+      ? defaultOptions
+      : Array.from(new Set([...defaultOptions, ...savedValues]));
+
     setItems(unique);
     setFiltered(unique);
   };
@@ -177,7 +184,8 @@ export default function Combobox({
           onFocus={() => setOpen(true)}
           onBlur={handleBlur}
           placeholder={placeholder}
-          className="flex-1 px-3 py-2 bg-transparent outline-none focus:outline-none"
+          disabled={disabled}
+          className="flex-1 px-3 py-2 bg-transparent outline-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <div className="flex items-center gap-1 pr-2">
           {input && (
