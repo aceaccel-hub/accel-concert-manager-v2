@@ -16,6 +16,8 @@ import {
 } from '../../../hooks/useMembers';
 import { db } from '../../../db/database';
 import { formatNumberInput, parseFormattedNumber } from '../../../utils/calculations';
+import { normalizeInstrumentName, getInstrumentBase } from '../../../utils/normalization';
+import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '../../../constants/memberOptions';
 import type { ConcertTabContext } from '../ConcertDetail';
 
 type ConcertMemberFull = ConcertMember & { member: Member };
@@ -214,8 +216,9 @@ function EditModal({
   });
 
   useEffect(() => {
+    const normalizedInstrument = normalizeInstrumentName(cm.instrument || member?.instrument);
     setForm({
-      instrument: cm.instrument || member?.instrument || '',
+      instrument: normalizedInstrument,
       part: cm.part || member?.part || '',
       role: (cm.role as MemberRole) || member?.role || '일반단원',
       phone: cm.phone || member?.phone || '',
@@ -325,16 +328,29 @@ function EditModal({
         </div>
         <div>
           <label className="label">악기</label>
-          <input className="input" value={form.instrument} onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value }))} />
+          <Combobox
+            category="instrument"
+            value={form.instrument}
+            onChange={(value) => setForm((f) => ({ ...f, instrument: value, part: '' }))}
+            defaultOptions={INSTRUMENT_OPTIONS}
+          />
         </div>
         <div>
           <label className="label">파트</label>
-          <Combobox
-            category="part"
-            value={form.part}
-            onChange={(value) => setForm((f) => ({ ...f, part: value }))}
-            defaultOptions={['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Contrabass', 'Piano', 'Flute', 'Oboe', 'Clarinet', 'Bassoon']}
-          />
+          {(() => {
+            const instrumentBase = getInstrumentBase(form.instrument);
+            const partOptions = PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+            const isDisabled = partOptions.length === 0;
+            return (
+              <Combobox
+                category="part"
+                value={form.part}
+                onChange={(value) => setForm((f) => ({ ...f, part: value }))}
+                defaultOptions={partOptions}
+                disabled={isDisabled}
+              />
+            );
+          })()}
         </div>
         <div>
           <label className="label">역할</label>
@@ -342,7 +358,7 @@ function EditModal({
             category="role"
             value={form.role}
             onChange={(value) => setForm((f) => ({ ...f, role: value as MemberRole }))}
-            defaultOptions={['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자']}
+            defaultOptions={ROLE_OPTIONS}
           />
         </div>
 
@@ -456,11 +472,14 @@ function MemberRow({
     Bass: 'bg-rose-50 text-rose-700',
     'Double Bass': 'bg-rose-50 text-rose-700',
   };
-  const instrument = cm.instrument || cm.member?.instrument || '-';
-  const part = cm.part || cm.member?.part || '기타';
-  const role = cm.role || cm.member?.role || '-';
-  const position = cm.position || '-';
-  const partColor = partColors[part] || 'bg-gray-50 text-gray-600';
+
+  // 표시 우선순위: 포지션 저장값 > 미배치 > 기존 DB 값
+  const instrumentValue = cm.assignedInstrument || cm.member?.instrument;
+  const instrument = normalizeInstrumentName(instrumentValue) || '-';
+  const part = cm.isAssigned ? (cm.assignedPart || '-') : '미배치';
+  const role = cm.isAssigned ? (cm.assignedRole || '-') : '미배치';
+  const seat = cm.isAssigned ? (cm.assignedSeat || '-') : '미배치';
+  const partColor = partColors[part] || (part === '미배치' ? 'bg-gray-100 text-gray-500' : 'bg-gray-50 text-gray-600');
 
   return (
     <tr className={`hover:bg-gray-50 ${cm.isReserve ? 'opacity-60' : ''}`}>
@@ -470,12 +489,13 @@ function MemberRow({
           <AbilityGradeBadge memberId={cm.member?.id ?? ''} grade={cm.member?.abilityGrade} onChanged={onReload} />
         </div>
       </td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{instrument}</td>
       <td className="px-4 py-3">
-        <span className={`badge text-xs ${partColor}`}>{part}</span>
+        <span className={`badge text-xs ${partColor}`}>
+          {instrument === '-' && part === '미배치' ? '미배치' : `${instrument} - ${part}`}
+        </span>
       </td>
       <td className="px-4 py-3 text-gray-600 text-sm">{role}</td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{position}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{seat}</td>
       <td className="px-4 py-3 text-gray-500 text-xs">{cm.phone || cm.member?.phone || '-'}</td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.residentNumber || cm.member?.residentNumber || '-'}</td>
       <td className="px-4 py-3 text-center text-gray-600 text-sm">
@@ -647,8 +667,7 @@ export default function MembersTab() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">이름 · 등급</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">악기</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">파트</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">배치 (악기-파트)</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">역할</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">포지션</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">연락처</th>
@@ -677,7 +696,7 @@ export default function MembersTab() {
       )}
 
       {showPositionChart && positionMembers.length > 0 && (
-        <PositionChart
+        <PositionChartModal
           concertId={concertId}
           members={positionMembers}
           onClose={() => setShowPositionChart(false)}
@@ -708,6 +727,199 @@ export default function MembersTab() {
 
       {editTarget && <EditModal cm={editTarget} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); load(); }} />}
     </div>
+  );
+}
+
+function PositionChartModal({
+  concertId,
+  members,
+  onClose,
+  onSaved,
+}: {
+  concertId: string;
+  members: ConcertMemberFull[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [seatAssignments, setSeatAssignments] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    db.concerts.get(concertId).then((concert) => {
+      if (!mounted) return;
+      const saved = concert?.positionAssignments ?? [];
+      const next: Record<string, string> = {};
+      saved.forEach((assignment) => {
+        if (!members.some((cm) => cm.memberId === assignment.musicianId)) return;
+        const seatId = assignmentSeatId(assignment);
+        if (seatId) next[seatId] = assignment.musicianId;
+      });
+      setSeatAssignments(next);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [concertId, members]);
+
+  const assignedMemberIds = new Set(Object.values(seatAssignments));
+  const unassigned = members.filter((cm) => !assignedMemberIds.has(cm.memberId));
+
+  const handleSeatChange = (seatId: string, memberId: string) => {
+    setSeatAssignments((current) => {
+      const next = { ...current };
+      Object.entries(next).forEach(([currentSeatId, currentMemberId]) => {
+        if (memberId && currentMemberId === memberId && currentSeatId !== seatId) {
+          delete next[currentSeatId];
+        }
+      });
+      if (memberId) {
+        next[seatId] = memberId;
+      } else {
+        delete next[seatId];
+      }
+      return next;
+    });
+  };
+
+  const memberLabel = (cm: ConcertMemberFull) => {
+    const instrumentValue = cm.member.instrument || cm.part || cm.member.part;
+    const normalizedInstrument = normalizeInstrumentName(instrumentValue) || '악기 미등록';
+    return `${cm.member.name} (${normalizedInstrument})`;
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const positionAssignments: PositionAssignment[] = POSITION_SEATS.flatMap((seat) => {
+        const memberId = seatAssignments[seat.id];
+        const cm = members.find((item) => item.memberId === memberId);
+        if (!cm) return [];
+        const sectionName = getPositionSectionName(seat);
+        const role = getCalculatedRole(seat);
+        const position = getPositionLabel(seat);
+        return [{
+          musicianId: cm.memberId,
+          name: cm.member.name,
+          instrument: sectionName,
+          part: sectionName,
+          position,
+          section: seat.section,
+          role,
+          desk: seat.desk,
+          seat: seat.seat,
+        }];
+      });
+
+      await db.transaction('rw', db.concerts, db.concertMembers, async () => {
+        await db.concerts.update(concertId, {
+          selectedMusicians: members.map((cm) => ({
+            musicianId: cm.memberId,
+            name: cm.member.name,
+            instrument: cm.member.instrument,
+          })),
+          positionAssignments,
+          updatedAt: new Date().toISOString(),
+        });
+
+        const assignmentByMemberId = new Map(positionAssignments.map((assignment) => [assignment.musicianId, assignment]));
+        await Promise.all(members.map((cm) => {
+          const assignment = assignmentByMemberId.get(cm.memberId);
+          return db.concertMembers.update(cm.id, assignment
+            ? {
+                assignedInstrument: assignment.instrument,
+                assignedPart: assignment.part ?? assignment.instrument,
+                assignedRole: assignment.role,
+                assignedSeat: assignment.position,
+                isAssigned: true,
+              }
+            : {
+                assignedInstrument: undefined,
+                assignedPart: undefined,
+                assignedRole: undefined,
+                assignedSeat: undefined,
+                isAssigned: false,
+              });
+        }));
+      });
+
+      showToast('포지션 차트가 단원관리에 반영되었습니다.');
+      onSaved();
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="포지션 차트"
+      onClose={onClose}
+      size="full"
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose}>닫기</button>
+          <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? '저장 중...' : '포지션 저장'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="text-sm text-gray-600 mb-4">
+          <p>선택된 단원 {members.length}명만 배치합니다. 악장/수석/부수석은 별도 역할 좌석이고, 일반 단원만 폴트 좌석에 넣어주세요.</p>
+        </div>
+
+        <div className="rounded-xl border border-blue-100 bg-white p-3">
+          <p className="text-xs font-semibold text-gray-600 mb-2">미배치 단원</p>
+          {unassigned.length === 0 ? (
+            <p className="text-xs text-gray-400">모든 선택 단원이 배치되었습니다.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {unassigned.map((cm) => (
+                <span key={cm.memberId} className="badge bg-gray-100 text-gray-600">
+                  {memberLabel(cm)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {POSITION_SECTIONS.map((section) => (
+            <div key={section.title} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                <p className="text-sm font-semibold text-gray-800">{section.title}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
+                {section.seats.map((seat) => {
+                  const current = seatAssignments[seat.id] ?? '';
+                  const selectableMembers = members.filter((cm) => !assignedMemberIds.has(cm.memberId) || cm.memberId === current);
+                  const isRoleSeat = seat.desk === null && (seat.role === '악장' || seat.role === '수석' || seat.role === '부수석');
+                  return (
+                    <label key={seat.id} className={`block rounded-lg border p-2 ${isRoleSeat ? 'border-blue-200 bg-blue-50/60' : 'border-gray-200'}`}>
+                      <span className="block text-xs font-semibold text-gray-600 mb-1">{seat.label}</span>
+                      <select
+                        className="input text-sm py-1.5"
+                        value={current}
+                        onChange={(e) => handleSeatChange(seat.id, e.target.value)}
+                      >
+                        <option value="">미배치</option>
+                        {selectableMembers.map((cm) => (
+                          <option key={cm.memberId} value={cm.memberId}>
+                            {memberLabel(cm)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -762,8 +974,11 @@ function PositionChart({
     });
   };
 
-  const memberLabel = (cm: ConcertMemberFull) =>
-    `${cm.member.name} (${cm.member.instrument || cm.part || cm.member.part || '악기 미등록'})`;
+  const memberLabel = (cm: ConcertMemberFull) => {
+    const instrumentValue = cm.member.instrument || cm.part || cm.member.part;
+    const normalizedInstrument = normalizeInstrumentName(instrumentValue) || '악기 미등록';
+    return `${cm.member.name} (${normalizedInstrument})`;
+  };
 
   const handleSave = async () => {
     const positionAssignments: PositionAssignment[] = POSITION_SEATS.flatMap((seat) => {
@@ -802,16 +1017,18 @@ function PositionChart({
         const assignment = assignmentByMemberId.get(cm.memberId);
         return db.concertMembers.update(cm.id, assignment
           ? {
-              instrument: assignment.instrument,
-              part: assignment.part ?? assignment.instrument,
-              role: assignment.role,
-              position: assignment.position,
+              assignedInstrument: assignment.instrument,
+              assignedPart: assignment.part ?? assignment.instrument,
+              assignedRole: assignment.role,
+              assignedSeat: assignment.position,
+              isAssigned: true,
             }
           : {
-              instrument: undefined,
-              part: undefined,
-              role: undefined,
-              position: undefined,
+              assignedInstrument: undefined,
+              assignedPart: undefined,
+              assignedRole: undefined,
+              assignedSeat: undefined,
+              isAssigned: false,
             });
       }));
     });
@@ -821,18 +1038,9 @@ function PositionChart({
   };
 
   return (
-    <div className="card p-4 space-y-4 border-blue-100 bg-blue-50/30">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-semibold text-gray-900">포지션 차트</h3>
-          <p className="text-xs text-gray-500 mt-1">
-            선택된 단원 {members.length}명만 배치합니다. 악장/수석/부수석은 별도 역할 좌석이고, 일반 단원만 폴트 좌석에 넣어주세요.
-          </p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button className="btn-secondary" onClick={onClose}>닫기</button>
-          <button className="btn-primary" onClick={handleSave}>포지션 저장</button>
-        </div>
+    <div className="space-y-4">
+      <div className="text-sm text-gray-600 mb-4">
+        <p>선택된 단원 {members.length}명만 배치합니다. 악장/수석/부수석은 별도 역할 좌석이고, 일반 단원만 폴트 좌석에 넣어주세요.</p>
       </div>
 
       <div className="rounded-xl border border-blue-100 bg-white p-3">
@@ -978,9 +1186,41 @@ function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onC
     <Modal title="새 단원 추가" onClose={onClose} size="md" footer={<><button className="btn-secondary" onClick={onClose}>취소</button><button className="btn-primary" onClick={handleSave}>저장</button></>}>
       <div className="grid grid-cols-2 gap-4">
         <div><label className="label">이름 *</label><input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-        <div><label className="label">악기</label><input className="input" value={form.instrument} onChange={(e) => setForm((f) => ({ ...f, instrument: e.target.value }))} /></div>
-        <div><label className="label">파트</label><input className="input" value={form.part} onChange={(e) => setForm((f) => ({ ...f, part: e.target.value }))} placeholder="Violin 1" /></div>
-        <div><label className="label">역할</label><select className="input" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as MemberRole }))}>{(['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자'] as MemberRole[]).map((r) => <option key={r}>{r}</option>)}</select></div>
+        <div>
+          <label className="label">악기</label>
+          <Combobox
+            category="instrument"
+            value={form.instrument}
+            onChange={(value) => setForm((f) => ({ ...f, instrument: value, part: '' }))}
+            defaultOptions={INSTRUMENT_OPTIONS}
+          />
+        </div>
+        <div>
+          <label className="label">파트</label>
+          {(() => {
+            const instrumentBase = getInstrumentBase(form.instrument);
+            const partOptions = PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+            const isDisabled = partOptions.length === 0;
+            return (
+              <Combobox
+                category="part"
+                value={form.part}
+                onChange={(value) => setForm((f) => ({ ...f, part: value }))}
+                defaultOptions={partOptions}
+                disabled={isDisabled}
+              />
+            );
+          })()}
+        </div>
+        <div>
+          <label className="label">역할</label>
+          <Combobox
+            category="role"
+            value={form.role}
+            onChange={(value) => setForm((f) => ({ ...f, role: value as MemberRole }))}
+            defaultOptions={ROLE_OPTIONS}
+          />
+        </div>
         <div><label className="label">연락처</label><input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
         <div><label className="label">사례비 (원)</label><input type="text" className="input" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: formatNumberInput(e.target.value) }))} /></div>
       </div>

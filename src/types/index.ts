@@ -173,6 +173,13 @@ export interface ConcertMember {
   id: string;
   concertId: string;
   memberId: string;
+  // 이번 연주회 배치 정보 (포지션 차트에서 결정)
+  assignedInstrument?: string; // 이번 연주회에서 배치된 악기
+  assignedPart?: string; // 이번 연주회에서 배치된 파트
+  assignedRole?: string; // 이번 연주회에서 배치된 역할
+  assignedSeat?: string; // 이번 연주회에서 배치된 좌석
+  isAssigned?: boolean; // 포지션 차트에서 배치 완료 여부
+  // 레거시 호환성 (점진적 제거 예정)
   instrument?: string;
   role?: string;
   part?: string;

@@ -98,6 +98,8 @@ export async function addMemberToConcert(
     evaluation: data.evaluation,
     isReserve: data.isReserve ?? false,
     note: data.note,
+    // 포지션 차트에서 배치될 때까지 미배치 상태
+    isAssigned: false,
   };
   await db.concertMembers.add(row);
 
