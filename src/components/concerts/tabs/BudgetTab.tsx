@@ -52,8 +52,9 @@ const sortConcertMembersByInstrument = (cms: ConcertMember[], members: Member[])
   return [...cms].sort((a, b) => {
     const aMember = members.find(m => m.id === a.memberId);
     const bMember = members.find(m => m.id === b.memberId);
-    const aInstrument = normalizeInstrumentName(a.instrument || aMember?.instrument);
-    const bInstrument = normalizeInstrumentName(b.instrument || bMember?.instrument);
+    // 우선순위: 포지션 배치 > 연주회 특화 > 기본 (MembersTab과 동일)
+    const aInstrument = normalizeInstrumentName(a.assignedInstrument || a.instrument || aMember?.instrument);
+    const bInstrument = normalizeInstrumentName(b.assignedInstrument || b.instrument || bMember?.instrument);
     const aSortIndex = getInstrumentSortIndex(aInstrument);
     const bSortIndex = getInstrumentSortIndex(bInstrument);
     return aSortIndex - bSortIndex;
