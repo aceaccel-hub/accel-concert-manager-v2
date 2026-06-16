@@ -80,6 +80,8 @@ export interface PositionAssignment {
   musicianId: string;
   name: string;
   instrument: string;
+  part?: string;
+  position?: string;
   section: string;
   role: string;
   desk: number | null;
@@ -171,8 +173,10 @@ export interface ConcertMember {
   id: string;
   concertId: string;
   memberId: string;
+  instrument?: string;
   role?: string;
   part?: string;
+  position?: string;
   fee?: number;
   feeExtra?: number;
   feeDeduction?: number;

@@ -98,11 +98,33 @@ const OTHER_POSITION_SECTIONS: { title: string; seats: PositionSeatDefinition[] 
 const POSITION_SECTIONS = [...STRING_POSITION_SECTIONS, ...OTHER_POSITION_SECTIONS];
 const POSITION_SEATS = POSITION_SECTIONS.flatMap((section) => section.seats);
 
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  '1st Violin': 'Violin I',
+  '2nd Violin': 'Violin II',
+  Viola: 'Viola',
+  Cello: 'Cello',
+  'Double Bass': 'Double Bass',
+};
+
+const getPositionSectionName = (seat: PositionSeatDefinition) => {
+  if (SECTION_DISPLAY_NAMES[seat.section]) return SECTION_DISPLAY_NAMES[seat.section];
+  return seat.label.replace(/\s+\d+$/, '');
+};
+
+const getPositionLabel = (seat: PositionSeatDefinition) => seat.label;
+
+const getCalculatedRole = (seat: PositionSeatDefinition): MemberRole => {
+  if (seat.label === '악장') return '악장';
+  if (seat.label === '수석') return '수석';
+  if (seat.label === '부수석') return '부수석';
+  return '일반단원';
+};
+
 const assignmentSeatId = (assignment: PositionAssignment) =>
   POSITION_SEATS.find(
     (seat) =>
       seat.section === assignment.section &&
-      seat.role === assignment.role &&
+      (seat.role === assignment.role || seat.label === assignment.position || seat.label === assignment.role) &&
       seat.desk === assignment.desk &&
       seat.seat === assignment.seat
   )?.id;
@@ -193,7 +215,7 @@ function EditModal({
 
   useEffect(() => {
     setForm({
-      instrument: member?.instrument || '',
+      instrument: cm.instrument || member?.instrument || '',
       part: cm.part || member?.part || '',
       role: (cm.role as MemberRole) || member?.role || '일반단원',
       phone: cm.phone || member?.phone || '',
@@ -216,6 +238,7 @@ function EditModal({
   const handleSave = async () => {
     // 연주회 멤버 정보 업데이트
     await db.concertMembers.update(cm.id, {
+      instrument: form.instrument,
       part: form.part,
       role: form.role,
       fee: parseFormattedNumber(form.fee),
@@ -425,12 +448,18 @@ function MemberRow({
 }) {
   const partColors: Record<string, string> = {
     'Violin 1': 'bg-blue-50 text-blue-700',
+    'Violin I': 'bg-blue-50 text-blue-700',
     'Violin 2': 'bg-indigo-50 text-indigo-700',
+    'Violin II': 'bg-indigo-50 text-indigo-700',
     Viola: 'bg-purple-50 text-purple-700',
     Cello: 'bg-pink-50 text-pink-700',
     Bass: 'bg-rose-50 text-rose-700',
+    'Double Bass': 'bg-rose-50 text-rose-700',
   };
+  const instrument = cm.instrument || cm.member?.instrument || '-';
   const part = cm.part || cm.member?.part || '기타';
+  const role = cm.role || cm.member?.role || '-';
+  const position = cm.position || '-';
   const partColor = partColors[part] || 'bg-gray-50 text-gray-600';
 
   return (
@@ -441,11 +470,12 @@ function MemberRow({
           <AbilityGradeBadge memberId={cm.member?.id ?? ''} grade={cm.member?.abilityGrade} onChanged={onReload} />
         </div>
       </td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{cm.member?.instrument || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{instrument}</td>
       <td className="px-4 py-3">
         <span className={`badge text-xs ${partColor}`}>{part}</span>
       </td>
-      <td className="px-4 py-3 text-gray-600 text-sm">{cm.role || '-'}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{role}</td>
+      <td className="px-4 py-3 text-gray-600 text-sm">{position}</td>
       <td className="px-4 py-3 text-gray-500 text-xs">{cm.phone || cm.member?.phone || '-'}</td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.residentNumber || cm.member?.residentNumber || '-'}</td>
       <td className="px-4 py-3 text-center text-gray-600 text-sm">
@@ -620,6 +650,7 @@ export default function MembersTab() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">악기</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">파트</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">역할</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">포지션</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">연락처</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">주민등록번호</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">출석률</th>
@@ -739,28 +770,53 @@ function PositionChart({
       const memberId = seatAssignments[seat.id];
       const cm = members.find((item) => item.memberId === memberId);
       if (!cm) return [];
+      const sectionName = getPositionSectionName(seat);
+      const role = getCalculatedRole(seat);
+      const position = getPositionLabel(seat);
       return [{
         musicianId: cm.memberId,
         name: cm.member.name,
-        instrument: cm.member.instrument,
+        instrument: sectionName,
+        part: sectionName,
+        position,
         section: seat.section,
-        role: seat.role,
+        role,
         desk: seat.desk,
         seat: seat.seat,
       }];
     });
 
-    await db.concerts.update(concertId, {
-      selectedMusicians: members.map((cm) => ({
-        musicianId: cm.memberId,
-        name: cm.member.name,
-        instrument: cm.member.instrument,
-      })),
-      positionAssignments,
-      updatedAt: new Date().toISOString(),
+    await db.transaction('rw', db.concerts, db.concertMembers, async () => {
+      await db.concerts.update(concertId, {
+        selectedMusicians: members.map((cm) => ({
+          musicianId: cm.memberId,
+          name: cm.member.name,
+          instrument: cm.member.instrument,
+        })),
+        positionAssignments,
+        updatedAt: new Date().toISOString(),
+      });
+
+      const assignmentByMemberId = new Map(positionAssignments.map((assignment) => [assignment.musicianId, assignment]));
+      await Promise.all(members.map((cm) => {
+        const assignment = assignmentByMemberId.get(cm.memberId);
+        return db.concertMembers.update(cm.id, assignment
+          ? {
+              instrument: assignment.instrument,
+              part: assignment.part ?? assignment.instrument,
+              role: assignment.role,
+              position: assignment.position,
+            }
+          : {
+              instrument: undefined,
+              part: undefined,
+              role: undefined,
+              position: undefined,
+            });
+      }));
     });
 
-    showToast('포지션 차트가 현재 연주회에 저장되었습니다.');
+    showToast('포지션 차트가 단원관리에 반영되었습니다.');
     onSaved();
   };
 
@@ -848,30 +904,34 @@ function AddMemberFromDB({
   const [selected, setSelected] = useState<string[]>([]);
 
   const handleAdd = async () => {
-    const selectedMembers = selected
+    const positionMemberIds = Array.from(new Set([...existing, ...selected]));
+    const positionMembers = positionMemberIds
       .map((memberId) => allMembers.find((m) => m.id === memberId))
       .filter((m): m is Member => Boolean(m));
+    const currentConcert = await db.concerts.get(concertId);
 
     for (const memberId of selected) {
       const m = allMembers.find((mm) => mm.id === memberId);
       if (!m) continue;
       try {
-        await addMemberToConcert(concertId, memberId, { role: m.role, part: m.part, fee: m.baseFee, isReserve: false });
+        await addMemberToConcert(concertId, memberId, { fee: m.baseFee, isReserve: false });
       } catch (e: any) {
         if (e?.message !== 'ALREADY_IN_CONCERT') throw e;
       }
     }
 
     await db.concerts.update(concertId, {
-      selectedMusicians: selectedMembers.map((member) => ({
+      selectedMusicians: positionMembers.map((member) => ({
         musicianId: member.id,
         name: member.name,
         instrument: member.instrument,
       })),
-      positionAssignments: [],
+      positionAssignments: (currentConcert?.positionAssignments ?? []).filter((assignment) =>
+        positionMemberIds.includes(assignment.musicianId)
+      ),
       updatedAt: new Date().toISOString(),
     });
-    onSaved(selected);
+    onSaved(positionMemberIds);
   };
 
   return (
