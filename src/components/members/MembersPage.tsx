@@ -15,36 +15,21 @@ import {
 import { db } from '../../db/database';
 import { useStore } from '../../store/store';
 import { getAllConcerts } from '../../hooks/useConcert';
+import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '../../constants/memberOptions';
+import { normalizeInstrumentName, getInstrumentBase } from '../../utils/normalization';
 
-const PARTS = ['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Bass', '관악기', '타악기', '기타'];
-
-const INSTRUMENTS = [
-  '바이올린',
-  '비올라',
-  '첼로',
-  '콘트라베이스',
-  '플루트',
-  '피콜로',
-  '오보에',
-  '잉글리시 호른',
-  '클라리넷',
-  '베이스 클라리넷',
-  '바순',
-  '콘트라바순',
-  '호른',
-  '트럼펫',
-  '트롬본',
-  '베이스 트롬본',
-  '튜바',
-  '팀파니',
-  '타악기',
-  '하프',
-  '피아노',
-  '오르간',
-  '성악',
-  '합창',
-  '기타',
-];
+// 부분 필터 옵션 (모든 parts의 union)
+const PARTS = Array.from(
+  new Set(Object.values(PART_OPTIONS_BY_INSTRUMENT).flat())
+).sort((a, b) => {
+  // 로마자 순서로 정렬 (I, II, III, IV)
+  const order = ['I', 'II', 'III', 'IV'];
+  const aIndex = order.indexOf(a);
+  const bIndex = order.indexOf(b);
+  if (aIndex === -1) return 1;
+  if (bIndex === -1) return -1;
+  return aIndex - bIndex;
+});
 
 export default function MembersPage() {
   const navigate = useNavigate();
@@ -319,7 +304,7 @@ function MemberForm({
     if (item)
       setForm({
         name: item.name,
-        instrument: item.instrument,
+        instrument: normalizeInstrumentName(item.instrument),
         part: item.part ?? '',
         role: item.role,
         phone: item.phone ?? '',
@@ -389,18 +374,26 @@ function MemberForm({
           <Combobox
             category="instrument"
             value={form.instrument}
-            onChange={(value) => setForm((f) => ({ ...f, instrument: value }))}
-            defaultOptions={INSTRUMENTS}
+            onChange={(value) => setForm((f) => ({ ...f, instrument: value, part: '' }))}
+            defaultOptions={INSTRUMENT_OPTIONS}
           />
         </div>
         <div>
           <label className="label">파트</label>
-          <Combobox
-            category="part"
-            value={form.part}
-            onChange={(value) => setForm((f) => ({ ...f, part: value }))}
-            defaultOptions={PARTS}
-          />
+          {(() => {
+            const instrumentBase = getInstrumentBase(form.instrument);
+            const partOptions = PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+            const isDisabled = partOptions.length === 0;
+            return (
+              <Combobox
+                category="part"
+                value={form.part}
+                onChange={(value) => setForm((f) => ({ ...f, part: value }))}
+                defaultOptions={partOptions}
+                disabled={isDisabled}
+              />
+            );
+          })()}
         </div>
         <div>
           <label className="label">역할</label>
@@ -408,7 +401,7 @@ function MemberForm({
             category="role"
             value={form.role}
             onChange={(value) => setForm((f) => ({ ...f, role: value as MemberRole }))}
-            defaultOptions={['악장', '수석', '부수석', '일반단원', '객원', '지휘자', '협연자']}
+            defaultOptions={ROLE_OPTIONS}
           />
         </div>
         <div>

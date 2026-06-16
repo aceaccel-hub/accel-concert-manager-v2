@@ -1,5 +1,5 @@
 // 악기/파트/역할 표준화 선택지
-// 엑셀 기준: 악보보관현황표(개별)
+// 요구사항: 악기·파트·역할_표준화_수정요청서.docx
 
 export const INSTRUMENT_OPTIONS = [
   'Violin I',
@@ -19,9 +19,12 @@ export const INSTRUMENT_OPTIONS = [
   'Harp',
 ];
 
+// Violin I, Violin II → Violin의 parts는 I, II
+// Flute, Oboe, Clarinet, Bassoon → parts는 I, II
+// Horn → parts는 I, II, III, IV
+// Trumpet, Trombone → parts는 I, II, III
+// Viola, V.Cello, C.Bass, Piano, Harp, Timpani → parts 없음
 export const PART_OPTIONS_BY_INSTRUMENT: Record<string, string[]> = {
-  'Violin I': ['I'],
-  'Violin II': ['II'],
   'Violin': ['I', 'II'],
   'Flute': ['I', 'II'],
   'Oboe': ['I', 'II'],
