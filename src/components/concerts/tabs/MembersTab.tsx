@@ -108,6 +108,35 @@ const SECTION_DISPLAY_NAMES: Record<string, string> = {
   'Double Bass': 'Double Bass',
 };
 
+// 악기 정렬 순서 (포지션 차트 기준)
+const INSTRUMENT_SORT_ORDER: Record<string, number> = {
+  'Violin I': 0,
+  'Violin II': 1,
+  'Viola': 2,
+  'V.Cello': 3,
+  'C.Bass': 4,
+  'Flute': 5,
+  'Piccolo': 6,
+  'Oboe': 7,
+  'English Horn': 8,
+  'Clarinet': 9,
+  'Bass Clarinet': 10,
+  'Bassoon': 11,
+  'Contrabassoon': 12,
+  'Horn': 13,
+  'Trumpet': 14,
+  'Trombone': 15,
+  'Tuba': 16,
+  'Timpani': 17,
+  'Percussion': 18,
+  'Piano': 19,
+  'Harp': 20,
+};
+
+const getInstrumentSortIndex = (instrument: string): number => {
+  return INSTRUMENT_SORT_ORDER[instrument] ?? 999;
+};
+
 const getPositionSectionName = (seat: PositionSeatDefinition) => {
   if (SECTION_DISPLAY_NAMES[seat.section]) return SECTION_DISPLAY_NAMES[seat.section];
   return seat.label.replace(/\s+\d+$/, '');
@@ -580,11 +609,20 @@ export default function MembersTab() {
   const regularCount = concertMembers.filter((m) => !m.isReserve).length;
   const reserveCount = concertMembers.filter((m) => m.isReserve).length;
 
-  const filtered = concertMembers.filter((m) => {
-    if (reserveFilter === '정단원') return !m.isReserve;
-    if (reserveFilter === '예비단원') return m.isReserve;
-    return true;
-  });
+  const filtered = concertMembers
+    .filter((m) => {
+      if (reserveFilter === '정단원') return !m.isReserve;
+      if (reserveFilter === '예비단원') return m.isReserve;
+      return true;
+    })
+    .sort((a, b) => {
+      // 포지션 차트의 악기 순서를 따름
+      const aInstrument = normalizeInstrumentName(a.member?.instrument || a.instrument);
+      const bInstrument = normalizeInstrumentName(b.member?.instrument || b.instrument);
+      const aSortIndex = getInstrumentSortIndex(aInstrument);
+      const bSortIndex = getInstrumentSortIndex(bInstrument);
+      return aSortIndex - bSortIndex;
+    });
 
   const positionMembers = concertMembers.filter((cm) => {
     const targetIds = positionMemberIds.length > 0 ? positionMemberIds : concertMembers.map((m) => m.memberId);
