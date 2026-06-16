@@ -95,14 +95,31 @@ export default function DocumentsTab() {
     name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
 
   const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = safeFileName(filename);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = safeFileName(filename);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+
+      // 명시적으로 click 이벤트 디스패치
+      const clickEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      link.dispatchEvent(clickEvent);
+
+      // 약간의 딜레이 후 제거
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 100);
+    } catch (error) {
+      console.error('파일 다운로드 오류:', error);
+      alert('파일 다운로드에 실패했습니다. 다시 시도해주세요.');
+    }
   };
 
   const saveBlobToFile = async (
