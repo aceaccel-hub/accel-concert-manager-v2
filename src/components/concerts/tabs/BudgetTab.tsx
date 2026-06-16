@@ -2,6 +2,7 @@ import SmartInput from '../../common/SmartInput';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign, GripVertical, Download, Check, Filter } from 'lucide-react';
+import { normalizeInstrumentName } from '../../../utils/normalization';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type DragStartEvent, DragOverlay,
@@ -17,6 +18,47 @@ import Modal from '../../common/Modal';
 import StatusBadge from '../../common/StatusBadge';
 
 type TabName = 'summary' | 'income' | 'expense' | 'withholding';
+
+// 악기 정렬 순서 (포지션 차트 기준)
+const INSTRUMENT_SORT_ORDER: Record<string, number> = {
+  'Violin I': 0,
+  'Violin II': 1,
+  'Viola': 2,
+  'V.Cello': 3,
+  'C.Bass': 4,
+  'Flute': 5,
+  'Piccolo': 6,
+  'Oboe': 7,
+  'English Horn': 8,
+  'Clarinet': 9,
+  'Bass Clarinet': 10,
+  'Bassoon': 11,
+  'Contrabassoon': 12,
+  'Horn': 13,
+  'Trumpet': 14,
+  'Trombone': 15,
+  'Tuba': 16,
+  'Timpani': 17,
+  'Percussion': 18,
+  'Piano': 19,
+  'Harp': 20,
+};
+
+const getInstrumentSortIndex = (instrument: string): number => {
+  return INSTRUMENT_SORT_ORDER[instrument] ?? 999;
+};
+
+const sortConcertMembersByInstrument = (cms: ConcertMember[], members: Member[]): ConcertMember[] => {
+  return [...cms].sort((a, b) => {
+    const aMember = members.find(m => m.id === a.memberId);
+    const bMember = members.find(m => m.id === b.memberId);
+    const aInstrument = normalizeInstrumentName(a.instrument || aMember?.instrument);
+    const bInstrument = normalizeInstrumentName(b.instrument || bMember?.instrument);
+    const aSortIndex = getInstrumentSortIndex(aInstrument);
+    const bSortIndex = getInstrumentSortIndex(bInstrument);
+    return aSortIndex - bSortIndex;
+  });
+};
 
 export default function BudgetTab() {
   const { concertId } = useParams<{ concertId: string }>();
@@ -54,7 +96,8 @@ export default function BudgetTab() {
   const income  = budgets.filter(b => b.type === '수입');
   // 지출내역: Budget의 지출 + ConcertMember의 단원페이 (동기화 문제 해결)
   const budgetExpense = budgets.filter(b => b.type === '지출' && b.category !== '단원페이');
-  const memberPayExpense: Budget[] = concertMembers
+  const sortedConcertMembers = sortConcertMembersByInstrument(concertMembers, members);
+  const memberPayExpense: Budget[] = sortedConcertMembers
     .filter(cm => cm.fee > 0)
     .map(cm => {
       const member = members.find(m => m.id === cm.memberId);
@@ -297,7 +340,7 @@ export default function BudgetTab() {
       {/* 섹션 4: 원천징수 내역 */}
       {activeTab === 'withholding' && (
         <WithholdingTable
-          concertMembers={concertMembers}
+          concertMembers={sortedConcertMembers}
           members={members}
         />
       )}
