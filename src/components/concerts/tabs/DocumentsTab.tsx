@@ -64,6 +64,7 @@ export default function DocumentsTab() {
   const [editingTitle, setEditingTitle] = useState('');
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [editingContent, setEditingContent] = useState('');
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
   const loadSaved = async () => {
     setSavedDocs(await getDocuments(concertId));
@@ -1010,6 +1011,7 @@ ${concert.title}
                   onClick={() => {
                     setSelectedType(d.type);
                     setPreview(d.content || '');
+                    setSelectedDocId(d.id);
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs flex items-center justify-between hover:bg-blue-50 hover:border-blue-300 transition-colors group"
                 >
@@ -1117,10 +1119,9 @@ ${concert.title}
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={async () => {
-                        // 현재 선택된 저장된 문서가 있으면 업데이트
-                        const selectedDoc = savedDocs.find((d) => d.content === preview);
-                        if (selectedDoc) {
-                          await updateDocument(selectedDoc.id, { content: editingContent });
+                        // 선택된 저장된 문서가 있으면 업데이트
+                        if (selectedDocId) {
+                          await updateDocument(selectedDocId, { content: editingContent });
                           loadSaved();
                         }
                         setPreview(editingContent);
