@@ -5,7 +5,7 @@ interface Props {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   footer?: ReactNode;
 }
 
@@ -14,6 +14,7 @@ const sizes = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  full: 'max-w-[96vw]',
 };
 
 export default function Modal({ title, onClose, children, size = 'md', footer }: Props) {

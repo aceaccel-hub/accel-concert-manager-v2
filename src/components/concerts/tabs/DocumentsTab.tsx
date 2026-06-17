@@ -395,7 +395,7 @@ ${concert.title}
 
   // ---------- PDF 내보내기 (print window — 테이블 형식) ----------
   const handleExportPDF = async () => {
-    const { programs, cms, rehearsals, budgets, checklists } = await fetchAllData();
+    const { programs, cms, rehearsals, budgets, cgs, checklists } = await fetchAllData();
     const num = docNumber();
     const today = new Date().toLocaleDateString('ko-KR');
     const exportText = await generateDocument(selectedType);
@@ -410,6 +410,25 @@ ${concert.title}
         .join('');
       return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
     };
+
+    const makeSection = (title: string, content: string) =>
+      `<section class="section"><h2>${esc(title)}</h2>${content}</section>`;
+
+    const makeKeyValueTable = (rows: (string | number)[][]) =>
+      `<table class="key-value"><tbody>${rows
+        .map(
+          (row) =>
+            `<tr>${row
+              .map((cell, index) => `<${index % 2 === 0 ? 'th' : 'td'}>${esc(cell)}</${index % 2 === 0 ? 'th' : 'td'}>`)
+              .join('')}</tr>`
+        )
+        .join('')}</tbody></table>`;
+
+    const makeTextBlock = (text: string) =>
+      `<div class="text-block">${esc(text)
+        .split('\n')
+        .map((line) => `<p>${line || '&nbsp;'}</p>`)
+        .join('')}</div>`;
 
     let bodyHtml = '';
 
@@ -466,6 +485,144 @@ ${concert.title}
         ['순서', '항목', '완료여부'],
         checklists.map((c, i) => [i + 1, c.title, c.isDone ? '완료 ✓' : '미완료'])
       );
+    } else if (selectedType === '기획서') {
+      const members = cms.filter((m) => !m.isReserve);
+      const totalDur = programs.reduce((s, p) => s + (p.duration ?? 0), 0);
+      bodyHtml =
+        `<div class="cover-box">
+          <p class="eyebrow">CONCERT PLAN</p>
+          <h2>${esc(concert.title)}</h2>
+          <p>${esc(concert.date)} ${esc(concert.time)} · ${esc(concert.place)}</p>
+        </div>` +
+        makeSection(
+          '1. 공연 개요',
+          makeKeyValueTable([
+            ['공연명', concert.title, '진행상태', concert.status],
+            ['일시', `${concert.date} ${concert.time}`, '장소', concert.place],
+            ['지휘', concert.conductor || '-', '협연', concert.coPerformer || '-'],
+            ['예상시간', `${totalDur}분${concert.intermissionDuration ? ` + 인터미션 ${concert.intermissionDuration}분` : ''}`, '출연단원', `${members.length}명`],
+          ])
+        ) +
+        makeSection(
+          '2. 프로그램',
+          programs.length
+            ? makeTable(
+                ['순서', '작곡가', '곡명', '협연자', '예상시간'],
+                programs.map((p) => [
+                  p.order,
+                  p.composer,
+                  p.title,
+                  p.soloist || '-',
+                  p.duration ? `${p.duration}분` : '-',
+                ])
+              )
+            : '<p class="empty">등록된 곡목이 없습니다.</p>'
+        ) +
+        makeSection(
+          '3. 출연 단원',
+          members.length
+            ? makeTable(
+                ['이름', '악기', '파트', '역할'],
+                members.map((m) => [
+                  m.member?.name || '-',
+                  m.instrument || m.member?.instrument || '-',
+                  m.part || m.member?.part || '-',
+                  m.role || m.member?.role || '-',
+                ])
+              )
+            : '<p class="empty">등록된 단원이 없습니다.</p>'
+        ) +
+        makeSection(
+          '4. 주최/주관/협력',
+          cgs.length
+            ? makeTable(
+                ['역할', '단체명'],
+                cgs.map((cg: any) => [cg.role, cg.group?.name || '-'])
+              )
+            : '<p class="empty">등록된 단체가 없습니다.</p>'
+        ) +
+        makeSection('5. 비고', makeTextBlock(concert.note || '-'));
+    } else if (selectedType === '견적서') {
+      const expense = budgets.filter((b) => b.type === '지출');
+      const supply = expense.reduce((s, b) => s + b.plannedAmount, 0);
+      const vat = Math.round(supply * 0.1);
+      const total = supply + vat;
+      bodyHtml =
+        makeSection(
+          '견적 정보',
+          makeKeyValueTable([
+            ['문서번호', num, '견적일', new Date().toISOString().slice(0, 10)],
+            ['공연명', concert.title, '장소', concert.place],
+            ['공연일시', `${concert.date} ${concert.time}`, '발행기관', '아첼 오케스트라'],
+          ])
+        ) +
+        makeSection(
+          '견적 항목',
+          expense.length
+            ? makeTable(
+                ['번호', '항목', '분류', '공급가액'],
+                expense.map((b, i) => [
+                  i + 1,
+                  b.title,
+                  b.category,
+                  `${b.plannedAmount.toLocaleString()}원`,
+                ])
+              )
+            : '<p class="empty">등록된 지출 예산 항목이 없습니다.</p>'
+        ) +
+        `<div class="amount-box">
+          <div><span>공급가액</span><strong>${supply.toLocaleString()}원</strong></div>
+          <div><span>부가세 10%</span><strong>${vat.toLocaleString()}원</strong></div>
+          <div class="total"><span>합계</span><strong>${total.toLocaleString()}원</strong></div>
+        </div>`;
+    } else if (selectedType === '프로그램북원고') {
+      const totalDur = programs.reduce((s, p) => s + (p.duration ?? 0), 0);
+      bodyHtml =
+        makeSection(
+          '공연 정보',
+          makeKeyValueTable([
+            ['공연명', concert.title, '일시', `${concert.date} ${concert.time}`],
+            ['장소', concert.place, '지휘', concert.conductor || '-'],
+            ['협연', concert.coPerformer || '-', '예상시간', `${totalDur}분`],
+          ])
+        ) +
+        makeSection(
+          '프로그램',
+          programs.length
+            ? programs
+                .map(
+                  (p) => `
+                  <div class="program-card">
+                    <p class="composer">${esc(p.composer)}</p>
+                    <h3>${esc(p.title)}</h3>
+                    ${p.movement ? `<p>${esc(p.movement)}</p>` : ''}
+                    ${p.soloist ? `<p class="soloist">협연: ${esc(p.soloist)}</p>` : ''}
+                  </div>`
+                )
+                .join('')
+            : '<p class="empty">등록된 곡목이 없습니다.</p>'
+        );
+    } else if (selectedType === '공지문') {
+      const nextRehearsal = rehearsals.find((r) => r.date >= new Date().toISOString().split('T')[0]);
+      bodyHtml =
+        makeSection(
+          '공연 안내',
+          makeTextBlock(
+            `안녕하세요. ${concert.title} 관련 공지드립니다.\n\n공연 일시: ${concert.date} ${concert.time}\n공연 장소: ${concert.place}\n지휘: ${concert.conductor || '-'}`
+          )
+        ) +
+        (nextRehearsal
+          ? makeSection(
+              '다음 연습',
+              makeKeyValueTable([
+                ['일시', `${nextRehearsal.date} ${nextRehearsal.startTime || nextRehearsal.time || ''}`, '장소', nextRehearsal.place],
+                ['유형', nextRehearsal.type, '메모', nextRehearsal.memo || '-'],
+              ])
+            )
+          : '') +
+        makeSection('마무리', makeTextBlock('많은 참여 바랍니다.\n감사합니다.'));
+    } else if (selectedType === '단원모집공고문') {
+      bodyHtml = makeSection('단원 모집 공고', makeTextBlock(exportText));
     } else if (selectedType === '원천징수영수증') {
       const entries = getReceiptEntries(cms);
       bodyHtml = entries.length
@@ -498,29 +655,48 @@ ${concert.title}
 <head>
   <meta charset="UTF-8">
   <title>${esc(concert.title)} — ${esc(selectedType)}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Noto Sans KR',sans-serif;padding:40px;color:#1a1a1a;font-size:11px;line-height:1.6}
-    .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1a2744;padding-bottom:12px;margin-bottom:18px}
-    .org{font-size:16px;font-weight:700;color:#1a2744}
+    body{font-family:'Malgun Gothic','Apple SD Gothic Neo',Arial,sans-serif;color:#1a1a1a;font-size:11px;line-height:1.6;background:#fff}
+    .page{padding:40px}
+    .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a2744;padding-bottom:12px;margin-bottom:18px}
+    .org{font-size:17px;font-weight:700;color:#1a2744}
     .org-sub{font-size:10px;color:#888;margin-top:2px}
     .meta{text-align:right;font-size:10px;color:#555;line-height:1.8}
     h1{font-size:18px;font-weight:700;text-align:center;margin:0 0 20px;color:#1a2744}
+    h2{font-size:13px;color:#1a2744;margin-bottom:8px}
+    h3{font-size:12px;color:#222;margin-bottom:4px}
+    .cover-box{border:1px solid #c5d0e0;background:#f7f9fd;padding:18px;margin-bottom:16px;text-align:center}
+    .cover-box .eyebrow{font-size:9px;letter-spacing:1.2px;color:#64748b;margin-bottom:4px}
+    .cover-box h2{font-size:19px;margin-bottom:6px}
+    .section{margin-bottom:16px;page-break-inside:avoid}
     table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10.5px}
     thead tr{background:#e8eef8}
     th{padding:7px 10px;text-align:left;font-weight:700;border:1px solid #c5d0e0;white-space:nowrap}
     td{padding:6px 10px;border:1px solid #dde4ed;vertical-align:top}
+    .key-value th{width:16%;background:#eef3fb;color:#1a2744}
+    .key-value td{width:34%}
     tr:nth-child(even) td{background:#f8fafd}
     .summary{margin-top:8px;font-size:10px;color:#555;text-align:right}
-    pre{font-family:'Noto Sans KR',sans-serif;white-space:pre-wrap;font-size:10.5px;line-height:1.9}
+    .text-block{border:1px solid #dde4ed;padding:12px;background:#fbfcfe}
+    .text-block p{min-height:1.4em}
+    .program-card{border:1px solid #dde4ed;padding:12px;margin-bottom:8px;page-break-inside:avoid}
+    .program-card .composer{font-size:10px;color:#64748b}
+    .program-card .soloist{margin-top:6px;color:#475569}
+    .amount-box{margin-left:auto;width:300px;border:1px solid #c5d0e0}
+    .amount-box div{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #dde4ed}
+    .amount-box div:last-child{border-bottom:0}
+    .amount-box .total{background:#e8eef8;color:#1a2744;font-size:13px}
+    .empty{padding:12px;border:1px dashed #cbd5e1;color:#64748b}
+    pre{font-family:'Malgun Gothic','Apple SD Gothic Neo',Arial,sans-serif;white-space:pre-wrap;font-size:10.5px;line-height:1.9}
     .receipt-page{page-break-after:always;margin-bottom:24px}
     .receipt-page h2{text-align:center;font-size:16px;margin:10px 0 18px;color:#1a2744}
-    @media print{@page{margin:15mm}body{padding:0}}
+    .footer-note{border-top:1px solid #e2e8f0;margin-top:18px;padding-top:8px;text-align:right;color:#64748b;font-size:9px}
+    @media print{@page{margin:15mm}.page{padding:0}}
   </style>
 </head>
 <body>
+  <div class="page">
   <div class="hd">
     <div>
       <div class="org">아첼 오케스트라</div>
@@ -534,6 +710,8 @@ ${concert.title}
   </div>
   <h1>${esc(selectedType)}</h1>
   ${bodyHtml}
+  <div class="footer-note">외부 전달용 PDF · ${esc(today)}</div>
+  </div>
 </body>
 </html>`;
 
@@ -1073,44 +1251,46 @@ ${concert.title}
             <Eye size={16} /> 미리보기 — {selectedType}
           </p>
 
-          {preview && (
-            <div className="flex gap-1.5 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
+            {preview && (
+              <>
               <button className="btn-secondary text-xs" onClick={() => setShowSave(true)}>
                 <Plus size={12} /> 저장
               </button>
               <button className="btn-secondary text-xs" onClick={handleCopy}>
                 <Clipboard size={12} /> 복사
               </button>
+              </>
+            )}
 
-              {/* 내보내기 버튼 그룹 */}
-              <div className="flex gap-1 border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={handleExportPDF}
-                  className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white text-red-600 hover:bg-red-50 transition-colors"
-                  title="PDF로 내보내기 (인쇄 다이얼로그)"
-                >
-                  <FileDown size={12} />
-                  PDF
-                </button>
-                <button
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white text-green-600 hover:bg-green-50 border-l border-gray-200 transition-colors"
-                  title="Excel(.xlsx)로 내보내기"
-                >
-                  <FileSpreadsheet size={12} />
-                  Excel
-                </button>
-                <button
-                  onClick={handleExportWord}
-                  className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white text-blue-600 hover:bg-blue-50 border-l border-gray-200 transition-colors"
-                  title="Word(.docx)로 내보내기"
-                >
-                  <FileText size={12} />
-                  Word
-                </button>
-              </div>
+            {/* 내보내기 버튼 그룹 */}
+            <div className="flex gap-1 border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onClick={handleExportPDF}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white text-red-600 hover:bg-red-50 transition-colors"
+                title="PDF로 내보내기"
+              >
+                <FileDown size={12} />
+                PDF
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white text-green-600 hover:bg-green-50 border-l border-gray-200 transition-colors"
+                title="Excel(.xlsx)로 내보내기"
+              >
+                <FileSpreadsheet size={12} />
+                Excel
+              </button>
+              <button
+                onClick={handleExportWord}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white text-blue-600 hover:bg-blue-50 border-l border-gray-200 transition-colors"
+                title="Word(.docx)로 내보내기"
+              >
+                <FileText size={12} />
+                Word
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="card flex-1 p-5 overflow-y-auto flex flex-col">

@@ -41,7 +41,7 @@ export default function DocumentsPage() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-400 inline-flex items-center gap-1">
-                <FileDown size={12} /> 문서 생성
+                <FileDown size={12} /> PDF · Excel · Word
               </span>
               <ChevronRight size={16} className="text-gray-300 group-hover:text-[#2563eb]" />
             </div>
@@ -71,7 +71,7 @@ export default function DocumentsPage() {
           ))}
         </div>
         <p className="text-xs text-blue-600 mt-3">
-          ※ 텍스트(.txt) 형식으로 다운로드할 수 있으며, 추후 PDF/Excel 출력 형식이 추가될 예정입니다.
+          ※ 연주회를 선택하면 문서 탭에서 PDF, Excel, Word 파일로 저장할 수 있습니다.
         </p>
       </div>
     </div>
