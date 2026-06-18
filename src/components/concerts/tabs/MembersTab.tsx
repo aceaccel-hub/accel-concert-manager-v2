@@ -81,6 +81,11 @@ const CONDUCTOR_POSITION_SECTION: { title: string; seats: PositionSeatDefinition
   seats: [makeRoleSeat('Conductor', '지휘자')],
 };
 
+const SOLOIST_POSITION_SECTION: { title: string; seats: PositionSeatDefinition[] } = {
+  title: 'Soloist',
+  seats: [makeRoleSeat('Soloist', '협연자')],
+};
+
 const STRING_POSITION_SECTIONS: { title: string; seats: PositionSeatDefinition[] }[] = [
   { title: '1st Violin', seats: [makeRoleSeat('1st Violin', '악장'), makeRoleSeat('1st Violin', '수석'), ...makeStringDeskSeats('1st Violin', 10)] },
   { title: '2nd Violin', seats: [makeRoleSeat('2nd Violin', '수석'), makeRoleSeat('2nd Violin', '부수석'), ...makeStringDeskSeats('2nd Violin', 10)] },
@@ -110,11 +115,12 @@ const OTHER_POSITION_SECTIONS: { title: string; seats: PositionSeatDefinition[] 
   ),
 }));
 
-const POSITION_SECTIONS = [CONDUCTOR_POSITION_SECTION, ...STRING_POSITION_SECTIONS, ...OTHER_POSITION_SECTIONS];
+const POSITION_SECTIONS = [CONDUCTOR_POSITION_SECTION, SOLOIST_POSITION_SECTION, ...STRING_POSITION_SECTIONS, ...OTHER_POSITION_SECTIONS];
 const POSITION_SEATS = POSITION_SECTIONS.flatMap((section) => section.seats);
 
 const SECTION_DISPLAY_NAMES: Record<string, string> = {
   Conductor: '지휘',
+  Soloist: '협연',
   '1st Violin': 'Violin I',
   '2nd Violin': 'Violin II',
   Viola: 'Viola',
@@ -270,6 +276,7 @@ const getPositionLabel = (seat: PositionSeatDefinition) => seat.label;
 
 const getCalculatedRole = (seat: PositionSeatDefinition): MemberRole => {
   if (seat.label === '지휘자') return '지휘자';
+  if (seat.label === '협연자') return '협연자';
   if (seat.label === '악장') return '악장';
   if (seat.label === '수석') return '수석';
   if (seat.label === '부수석') return '부수석';
@@ -1045,7 +1052,7 @@ function PositionChartModal({
     >
       <div className="space-y-4">
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          선택된 단원 {members.length}명 중 {assignedCount}명이 배치되었습니다. 지휘자, 악장, 수석, 부수석은 전용 좌석에 배치하고 나머지 단원은 폴트 좌석에 넣어주세요.
+          선택된 단원 {members.length}명 중 {assignedCount}명이 배치되었습니다. 지휘자, 협연자, 악장, 수석, 부수석은 전용 좌석에 배치하고 나머지 단원은 폴트 좌석에 넣어주세요.
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-900 to-slate-700 px-4 py-3 text-center text-white shadow-sm">
@@ -1082,26 +1089,31 @@ function PositionChartModal({
           <div className="space-y-4">
             {POSITION_SECTIONS.map((section) => {
               const isConductorSection = section.title === 'Conductor';
+              const isSoloistSection = section.title === 'Soloist';
+              const isFeaturedSection = isConductorSection || isSoloistSection;
               return (
-                <div key={section.title} className={`rounded-xl border bg-white overflow-hidden ${isConductorSection ? 'border-amber-200 shadow-sm' : 'border-gray-200'}`}>
-                  <div className={`px-4 py-2 border-b ${isConductorSection ? 'bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-200'}`}>
-                    <p className={`text-sm font-semibold ${isConductorSection ? 'text-amber-800' : 'text-gray-800'}`}>
-                      {isConductorSection ? '지휘자' : section.title}
+                <div key={section.title} className={`rounded-xl border bg-white overflow-hidden ${isFeaturedSection ? 'border-amber-200 shadow-sm' : 'border-gray-200'}`}>
+                  <div className={`px-4 py-2 border-b ${isFeaturedSection ? 'bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-200'}`}>
+                    <p className={`text-sm font-semibold ${isFeaturedSection ? 'text-amber-800' : 'text-gray-800'}`}>
+                      {isConductorSection ? '지휘자' : isSoloistSection ? '협연자' : section.title}
                     </p>
                     {isConductorSection && (
                       <p className="mt-0.5 text-xs text-amber-700">오케스트라 앞 중앙 지휘자 자리입니다.</p>
                     )}
+                    {isSoloistSection && (
+                      <p className="mt-0.5 text-xs text-amber-700">협연자 또는 독주자를 별도로 배치하는 자리입니다.</p>
+                    )}
                   </div>
-                  <div className={`grid gap-3 p-4 ${isConductorSection ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'}`}>
+                  <div className={`grid gap-3 p-4 ${isFeaturedSection ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'}`}>
                     {section.seats.map((seat) => {
                       const current = seatAssignments[seat.id] ?? '';
                       const selectableMembers = members.filter((cm) => !assignedMemberIds.has(cm.memberId) || cm.memberId === current);
-                      const isRoleSeat = seat.desk === null && (seat.role === '지휘자' || seat.role === '악장' || seat.role === '수석' || seat.role === '부수석');
+                      const isRoleSeat = seat.desk === null && (seat.role === '지휘자' || seat.role === '협연자' || seat.role === '악장' || seat.role === '수석' || seat.role === '부수석');
                       return (
                         <label
                           key={seat.id}
                           className={`block rounded-lg border p-2 transition-colors ${
-                            seat.role === '지휘자'
+                            seat.role === '지휘자' || seat.role === '협연자'
                               ? 'border-amber-200 bg-amber-50/80'
                               : isRoleSeat
                                 ? 'border-blue-200 bg-blue-50/60'
@@ -1252,7 +1264,7 @@ function PositionChart({
   return (
     <div className="space-y-4">
       <div className="text-sm text-gray-600 mb-4">
-        <p>선택된 단원 {members.length}명만 배치합니다. 악장/수석/부수석은 별도 역할 좌석이고, 일반 단원만 폴트 좌석에 넣어주세요.</p>
+        <p>선택된 단원 {members.length}명만 배치합니다. 지휘자/협연자/악장/수석/부수석은 별도 역할 좌석이고, 일반 단원만 폴트 좌석에 넣어주세요.</p>
       </div>
 
       <div className="rounded-xl border border-blue-100 bg-white p-3">
@@ -1280,7 +1292,7 @@ function PositionChart({
               {section.seats.map((seat) => {
                 const current = seatAssignments[seat.id] ?? '';
                 const selectableMembers = members.filter((cm) => !assignedMemberIds.has(cm.memberId) || cm.memberId === current);
-                const isRoleSeat = seat.desk === null && (seat.role === '악장' || seat.role === '수석' || seat.role === '부수석');
+                const isRoleSeat = seat.desk === null && (seat.role === '지휘자' || seat.role === '협연자' || seat.role === '악장' || seat.role === '수석' || seat.role === '부수석');
                 return (
                   <label key={seat.id} className={`block rounded-lg border p-2 ${isRoleSeat ? 'border-blue-200 bg-blue-50/60' : 'border-gray-200'}`}>
                     <span className="block text-xs font-semibold text-gray-600 mb-1">{seat.label}</span>
