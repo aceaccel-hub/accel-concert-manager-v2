@@ -170,11 +170,30 @@ const getConcertMemberInstrument = (cm: ConcertMemberFull): string =>
 const getConcertMemberPart = (cm: ConcertMemberFull): string =>
   cm.assignedPart || cm.part || cm.member?.part || '';
 
+const ROLE_SORT_ORDER: Record<string, number> = {
+  지휘자: -2,
+  악장: -1,
+  수석: 0,
+  부수석: 1,
+  일반단원: 2,
+  객원: 3,
+  협연자: 4,
+  미배치: 99,
+};
+
+const getConcertMemberRole = (cm: ConcertMemberFull): string =>
+  cm.assignedRole || cm.role || cm.member?.role || '';
+
+const getRoleSortIndex = (role: string): number => ROLE_SORT_ORDER[role] ?? 50;
+
 const sortConcertMemberFulls = (items: ConcertMemberFull[]): ConcertMemberFull[] =>
   [...items].sort((a, b) => {
     const instrumentDiff =
       getInstrumentSortIndex(getConcertMemberInstrument(a)) - getInstrumentSortIndex(getConcertMemberInstrument(b));
     if (instrumentDiff !== 0) return instrumentDiff;
+
+    const roleDiff = getRoleSortIndex(getConcertMemberRole(a)) - getRoleSortIndex(getConcertMemberRole(b));
+    if (roleDiff !== 0) return roleDiff;
 
     const partDiff = getConcertMemberPart(a).localeCompare(getConcertMemberPart(b), 'ko', { numeric: true });
     if (partDiff !== 0) return partDiff;
