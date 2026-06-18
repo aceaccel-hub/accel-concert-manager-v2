@@ -16,7 +16,7 @@ import {
 } from '../../../hooks/useMembers';
 import { db } from '../../../db/database';
 import { formatNumberInput, parseFormattedNumber } from '../../../utils/calculations';
-import { normalizeInstrumentName, getInstrumentBase } from '../../../utils/normalization';
+import { normalizeInstrumentName, getInstrumentBase, normalizeMemberInstrumentPart } from '../../../utils/normalization';
 import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '../../../constants/memberOptions';
 import type { ConcertTabContext } from '../ConcertDetail';
 
@@ -385,10 +385,14 @@ function EditModal({
   });
 
   useEffect(() => {
-    const normalizedInstrument = normalizeInstrumentName(cm.instrument || member?.instrument);
+    const normalized = normalizeMemberInstrumentPart({
+      instrument: cm.instrument || member?.instrument,
+      part: cm.part || member?.part,
+    });
+    const normalizedInstrument = normalizeInstrumentName(normalized.instrument);
     setForm({
       instrument: normalizedInstrument,
-      part: cm.part || member?.part || '',
+      part: normalized.part || '',
       role: (cm.role as MemberRole) || member?.role || '일반단원',
       phone: cm.phone || member?.phone || '',
       email: member?.email || '',

@@ -16,7 +16,7 @@ import { db } from '../../db/database';
 import { useStore } from '../../store/store';
 import { getAllConcerts } from '../../hooks/useConcert';
 import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '../../constants/memberOptions';
-import { normalizeInstrumentName, getInstrumentBase } from '../../utils/normalization';
+import { normalizeInstrumentName, getInstrumentBase, normalizeMemberInstrumentPart } from '../../utils/normalization';
 
 // 부분 필터 옵션 (모든 parts의 union)
 const PARTS = Array.from(
@@ -301,11 +301,16 @@ function MemberForm({
   });
 
   useEffect(() => {
-    if (item)
+    if (item) {
+      const normalized = normalizeMemberInstrumentPart({
+        instrument: item.instrument,
+        part: item.part,
+      });
+      const normalizedInstrument = normalizeInstrumentName(normalized.instrument);
       setForm({
         name: item.name,
-        instrument: normalizeInstrumentName(item.instrument),
-        part: item.part ?? '',
+        instrument: normalizedInstrument,
+        part: normalized.part ?? '',
         role: item.role,
         phone: item.phone ?? '',
         email: item.email ?? '',
@@ -322,6 +327,7 @@ function MemberForm({
         joinDate: item.joinDate ?? '',
         note: item.note ?? '',
       });
+    }
   }, [item]);
 
   const handleSave = async () => {

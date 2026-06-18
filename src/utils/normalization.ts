@@ -123,3 +123,26 @@ export function getInstrumentBase(instrument: string | undefined): string {
 
   return normalized;
 }
+
+// 기존 잘못 저장된 데이터 보정 (instrument가 Violin I/II인 경우)
+export function normalizeMemberInstrumentPart(member: { instrument?: string; part?: string }): { instrument?: string; part?: string } {
+  const normalized = normalizeInstrumentName(member.instrument);
+
+  if (normalized === 'Violin I') {
+    return {
+      ...member,
+      instrument: 'Violin',
+      part: member.part || 'Violin I',
+    };
+  }
+
+  if (normalized === 'Violin II') {
+    return {
+      ...member,
+      instrument: 'Violin',
+      part: member.part || 'Violin II',
+    };
+  }
+
+  return member;
+}
