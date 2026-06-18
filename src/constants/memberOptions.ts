@@ -43,4 +43,5 @@ export const ROLE_OPTIONS = [
   '객원',
   '지휘자',
   '협연자',
+  '편곡자',
 ];

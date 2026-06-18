@@ -86,6 +86,11 @@ const SOLOIST_POSITION_SECTION: { title: string; seats: PositionSeatDefinition[]
   seats: [makeRoleSeat('Soloist', '협연자')],
 };
 
+const ARRANGER_POSITION_SECTION: { title: string; seats: PositionSeatDefinition[] } = {
+  title: 'Arranger',
+  seats: [makeRoleSeat('Arranger', '편곡자')],
+};
+
 const STRING_POSITION_SECTIONS: { title: string; seats: PositionSeatDefinition[] }[] = [
   { title: '1st Violin', seats: [makeRoleSeat('1st Violin', '악장'), makeRoleSeat('1st Violin', '수석'), ...makeStringDeskSeats('1st Violin', 10)] },
   { title: '2nd Violin', seats: [makeRoleSeat('2nd Violin', '수석'), makeRoleSeat('2nd Violin', '부수석'), ...makeStringDeskSeats('2nd Violin', 10)] },
@@ -115,12 +120,13 @@ const OTHER_POSITION_SECTIONS: { title: string; seats: PositionSeatDefinition[] 
   ),
 }));
 
-const POSITION_SECTIONS = [CONDUCTOR_POSITION_SECTION, SOLOIST_POSITION_SECTION, ...STRING_POSITION_SECTIONS, ...OTHER_POSITION_SECTIONS];
+const POSITION_SECTIONS = [CONDUCTOR_POSITION_SECTION, SOLOIST_POSITION_SECTION, ARRANGER_POSITION_SECTION, ...STRING_POSITION_SECTIONS, ...OTHER_POSITION_SECTIONS];
 const POSITION_SEATS = POSITION_SECTIONS.flatMap((section) => section.seats);
 
 const SECTION_DISPLAY_NAMES: Record<string, string> = {
   Conductor: '지휘',
   Soloist: '협연',
+  Arranger: '편곡',
   '1st Violin': 'Violin I',
   '2nd Violin': 'Violin II',
   Viola: 'Viola',
@@ -184,6 +190,7 @@ const ROLE_SORT_ORDER: Record<string, number> = {
   일반단원: 2,
   객원: 3,
   협연자: 4,
+  편곡자: 5,
   미배치: 99,
 };
 
@@ -277,6 +284,7 @@ const getPositionLabel = (seat: PositionSeatDefinition) => seat.label;
 const getCalculatedRole = (seat: PositionSeatDefinition): MemberRole => {
   if (seat.label === '지휘자') return '지휘자';
   if (seat.label === '협연자') return '협연자';
+  if (seat.label === '편곡자') return '편곡자';
   if (seat.label === '악장') return '악장';
   if (seat.label === '수석') return '수석';
   if (seat.label === '부수석') return '부수석';
