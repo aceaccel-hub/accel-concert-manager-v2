@@ -1494,6 +1494,47 @@ const DEFAULT_INSTRUMENTS = [
   '기타',
 ];
 
+const DEFAULT_RECRUITMENT_NOTICE_TEMPLATE = `선생님 안녕하세요. ^^
+
+• *제45회 아첼청소년오케스트라 정기연주회
+
+「어울림 음악회」**에 함께 연주해 주실 객원 선생님을 모시고자 연락드립니다.
+
+가능하시면 함께해 주시면 감사하겠습니다.
+
+[연주 일정]
+
+• 연주일: 3월 15일(일) 오후 6:00
+
+• 장소: 별모래극장
+
+• 당일 리허설: 오후 1:30
+
+• 복장: 검정 하의, 흰색 긴팔 상의
+
+[전체 리허설]
+
+• 3월 8일(일) 오후 5:00 ~ 8:00
+
+장소: 아첼뮤직아트홀
+
+주소: 덕양구 백양로 142-8, 지층
+
+• 3월 14일(토) 오후 3:00 ~ 6:00
+
+장소: 아첼뮤직아트홀
+
+[사례비]
+
+• 200,000원
+
+일정 가능하실까요?
+
+검토 부탁드립니다.
+
+
+감사합니다. 😊`;
+
 // 단원모집공고문 빌더
 function RecruitmentNoticeBuilder({
   concert,
@@ -1523,26 +1564,7 @@ function RecruitmentNoticeBuilder({
   }, []);
 
   const generatePreview = () => {
-    const needText = needList.length > 0
-      ? needList.map((n) => `  - ${n.instrument}: ${n.count}명`).join('\n')
-      : '(필요 인원 미지정)';
-
-    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【 단원 모집 공고 】
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-안녕하세요.
-
-이번 ${concert.title}을 위해 다음과 같이 단원을 모집합니다.
-
-■ 공연 일시: ${concert.date} ${concert.time}
-■ 공연 장소: ${concert.place}
-
-■ 모집 인원:
-${needText}
-
-관심 있으신 분은 아래로 연락 주세요.
-감사합니다.`;
+    return DEFAULT_RECRUITMENT_NOTICE_TEMPLATE;
   };
 
   useEffect(() => {
