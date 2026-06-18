@@ -146,29 +146,35 @@ export function startAutoCloudSync(): AutoSyncController {
       const meta = getMeta();
       const cloud = await testCloudConnection(settings);
 
-      if (cloud.exists && cloud.data && !meta) {
-        await applyRemoteBundle(cloud.data, cloud.updatedAt ?? null);
-        return;
-      }
+      if (cloud.exists && cloud.data) {
+        const cloudFingerprint = await fingerprintBundle(cloud.data);
 
-      const dirty = hasDirtyLocalChanges(localFingerprint, meta);
+        if (cloudFingerprint === localFingerprint) {
+          saveMeta({
+            fingerprint: localFingerprint,
+            cloudUpdatedAt: cloud.updatedAt ?? meta?.cloudUpdatedAt ?? null,
+          });
+          clearDirty();
+          return;
+        }
 
-      if (dirty) {
-        const result = await pushCloudData(localBundle, settings);
-        saveMeta({
-          fingerprint: localFingerprint,
-          cloudUpdatedAt: result.updatedAt ?? new Date().toISOString(),
-        });
-        clearDirty();
-        return;
-      }
+        if (!meta) {
+          await applyRemoteBundle(cloud.data, cloud.updatedAt ?? null);
+          return;
+        }
 
-      const cloudChanged =
-        Boolean(cloud.exists && cloud.data) &&
-        Boolean(cloud.updatedAt) &&
-        cloud.updatedAt !== meta?.cloudUpdatedAt;
+        const dirty = hasDirtyLocalChanges(localFingerprint, meta);
 
-      if (cloudChanged && cloud.data) {
+        if (dirty) {
+          const result = await pushCloudData(localBundle, settings);
+          saveMeta({
+            fingerprint: localFingerprint,
+            cloudUpdatedAt: result.updatedAt ?? new Date().toISOString(),
+          });
+          clearDirty();
+          return;
+        }
+
         await applyRemoteBundle(cloud.data, cloud.updatedAt ?? null);
         return;
       }
