@@ -1,9 +1,21 @@
 import { useState, useRef } from 'react';
-import { Save, RotateCcw, Download, Upload, Database, AlertTriangle, Plus } from 'lucide-react';
+import { Save, RotateCcw, Download, Upload, Database, AlertTriangle, Plus, Cloud } from 'lucide-react';
 import { useStore } from '../../store/store';
 import { initSampleData, exportAllData, importAllData, clearAllData, addMembersFromList } from '../../db/database';
+import {
+  getCloudSyncSettings,
+  saveCloudSyncSettings,
+  testCloudConnection,
+  pullCloudData,
+  pushCloudData,
+  type CloudSyncSettings,
+} from '../../services/cloudSync';
 import Modal from '../common/Modal';
 import type { BackupBundle, Settings } from '../../types';
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '오류';
+}
 
 export default function SettingsPage() {
   const { settings, updateSettings, resetSettings } = useStore();
@@ -11,6 +23,8 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [cloudSettings, setCloudSettings] = useState<CloudSyncSettings>(getCloudSyncSettings());
+  const [cloudBusy, setCloudBusy] = useState<'test' | 'pull' | 'push' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const flash = (kind: 'ok' | 'err', text: string, ms = 2000) => {
@@ -34,8 +48,8 @@ export default function SettingsPage() {
       a.click();
       URL.revokeObjectURL(url);
       flash('ok', '백업 파일이 저장되었습니다.', 3000);
-    } catch (e: any) {
-      flash('err', '백업 실패: ' + (e?.message ?? '오류'));
+    } catch (error: unknown) {
+      flash('err', '백업 실패: ' + getErrorMessage(error));
     }
   };
 
@@ -52,11 +66,11 @@ export default function SettingsPage() {
       await importAllData(data);
       flash('ok', '데이터가 복원되었습니다. 페이지를 새로고침합니다.', 1500);
       setTimeout(() => window.location.reload(), 1500);
-    } catch (err: any) {
-      if (err?.message === 'INVALID_BACKUP_VERSION') {
+    } catch (error: unknown) {
+      if (getErrorMessage(error) === 'INVALID_BACKUP_VERSION') {
         flash('err', '백업 파일 버전이 호환되지 않습니다.');
       } else {
-        flash('err', '복원 실패: ' + (err?.message ?? '오류'));
+        flash('err', '복원 실패: ' + getErrorMessage(error));
       }
     } finally {
       e.target.value = '';
@@ -75,8 +89,8 @@ export default function SettingsPage() {
       await addMembersFromList();
       flash('ok', '단원명단이 추가되었습니다. 페이지를 새로고침합니다.', 1500);
       setTimeout(() => window.location.reload(), 1500);
-    } catch (err: any) {
-      flash('err', '단원명단 추가 실패: ' + (err?.message ?? '오류'));
+    } catch (error: unknown) {
+      flash('err', '단원명단 추가 실패: ' + getErrorMessage(error));
     }
   };
 
@@ -85,12 +99,75 @@ export default function SettingsPage() {
       await clearAllData();
       flash('ok', '모든 데이터가 초기화되었습니다. 페이지를 새로고침합니다.', 1500);
       setTimeout(() => window.location.reload(), 1500);
-    } catch (err: any) {
-      flash('err', '초기화 실패: ' + (err?.message ?? '오류'));
+    } catch (error: unknown) {
+      flash('err', '초기화 실패: ' + getErrorMessage(error));
+    }
+  };
+
+  const handleSaveCloudSettings = () => {
+    saveCloudSyncSettings(cloudSettings);
+    flash('ok', '클라우드 DB 설정이 저장되었습니다.');
+  };
+
+  const handleTestCloud = async () => {
+    try {
+      setCloudBusy('test');
+      saveCloudSyncSettings(cloudSettings);
+      const result = await testCloudConnection(cloudSettings);
+      flash(
+        'ok',
+        result.exists
+          ? `클라우드 연결 성공. 마지막 저장: ${result.updatedAt?.slice(0, 16) ?? '확인됨'}`
+          : '클라우드 연결 성공. 아직 저장된 데이터는 없습니다.',
+        3500
+      );
+    } catch (error: unknown) {
+      flash('err', '클라우드 연결 실패: ' + getErrorMessage(error), 4000);
+    } finally {
+      setCloudBusy(null);
+    }
+  };
+
+  const handlePullCloud = async () => {
+    if (!confirm('현재 컴퓨터의 데이터가 클라우드 데이터로 교체됩니다.\n계속하시겠습니까?')) return;
+
+    try {
+      setCloudBusy('pull');
+      saveCloudSyncSettings(cloudSettings);
+      const bundle = await pullCloudData(cloudSettings);
+      await importAllData(bundle);
+      flash('ok', '클라우드 데이터를 불러왔습니다. 페이지를 새로고침합니다.', 1500);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error: unknown) {
+      flash('err', '클라우드 불러오기 실패: ' + getErrorMessage(error), 4000);
+    } finally {
+      setCloudBusy(null);
+    }
+  };
+
+  const handlePushCloud = async () => {
+    if (!confirm('이 컴퓨터의 현재 데이터를 클라우드 기준 데이터로 저장합니다.\n계속하시겠습니까?')) return;
+
+    try {
+      setCloudBusy('push');
+      saveCloudSyncSettings(cloudSettings);
+      const bundle = await exportAllData();
+      const result = await pushCloudData(bundle, cloudSettings);
+      flash(
+        'ok',
+        `클라우드에 저장되었습니다. ${result.updatedAt?.slice(0, 16) ?? ''}`,
+        3500
+      );
+    } catch (error: unknown) {
+      flash('err', '클라우드 저장 실패: ' + getErrorMessage(error), 4000);
+    } finally {
+      setCloudBusy(null);
     }
   };
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const setCloud = <K extends keyof CloudSyncSettings>(k: K, v: CloudSyncSettings[K]) =>
+    setCloudSettings((current) => ({ ...current, [k]: v }));
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -165,6 +242,72 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* 클라우드 DB */}
+        <section className="card p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+            <h2 className="text-sm font-semibold text-gray-700">클라우드 DB</h2>
+            <span className="badge bg-blue-50 text-blue-700">Vercel Blob</span>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="label">클라우드 API 주소</label>
+              <input
+                className="input"
+                placeholder="/api/cloud-state 또는 https://.../api/cloud-state"
+                value={cloudSettings.endpoint}
+                onChange={(e) => setCloud('endpoint', e.target.value)}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Vercel에 배포한 사이트에서는 기본값 /api/cloud-state 를 그대로 사용할 수 있습니다.
+              </p>
+            </div>
+            <div>
+              <label className="label">동기화 코드</label>
+              <input
+                type="password"
+                className="input"
+                placeholder="선생님과 공유할 동기화 코드"
+                value={cloudSettings.token}
+                onChange={(e) => setCloud('token', e.target.value)}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Vercel 환경변수 CLOUD_SYNC_TOKEN 과 같은 값을 입력해야 합니다.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button className="btn-secondary justify-center" onClick={handleSaveCloudSettings}>
+              <Save size={14} /> 클라우드 설정 저장
+            </button>
+            <button
+              className="btn-secondary justify-center"
+              onClick={handleTestCloud}
+              disabled={cloudBusy !== null}
+            >
+              <Cloud size={14} /> {cloudBusy === 'test' ? '확인 중...' : '연결 확인'}
+            </button>
+            <button
+              className="btn-secondary justify-center"
+              onClick={handlePullCloud}
+              disabled={cloudBusy !== null}
+            >
+              <Download size={14} /> {cloudBusy === 'pull' ? '불러오는 중...' : '클라우드에서 불러오기'}
+            </button>
+            <button
+              className="btn-primary justify-center"
+              onClick={handlePushCloud}
+              disabled={cloudBusy !== null}
+            >
+              <Upload size={14} /> {cloudBusy === 'push' ? '저장 중...' : '클라우드로 올리기'}
+            </button>
+          </div>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
+            기존 데이터가 있는 컴퓨터에서 먼저 클라우드로 올리고, 다른 컴퓨터에서는 클라우드에서
+            불러오기를 누르세요. 동시에 여러 사람이 같은 항목을 수정하는 실시간 공동 편집은 다음
+            단계에서 충돌 방지 규칙을 추가해야 합니다.
+          </div>
+        </section>
+
 
         {/* 데이터 관리 */}
         <section className="card p-6 space-y-4">
@@ -219,8 +362,8 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-2 text-sm text-gray-600">
             <p>버전: Accel Concert Manager v1.0</p>
-            <p>저장소: IndexedDB (로컬)</p>
-            <p>스택: React 19 · React Router 7 · Zustand · Dexie · Tailwind 4</p>
+            <p>저장소: IndexedDB (로컬 캐시) + Vercel Blob 클라우드 동기화</p>
+            <p>스택: React 19 · React Router 7 · Zustand · Dexie · Tailwind 4 · Vercel Blob</p>
           </div>
         </section>
       </div>

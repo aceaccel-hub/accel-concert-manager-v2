@@ -313,4 +313,5 @@ export interface BackupBundle {
   documents: ConcertDocument[];
   checklists: Checklist[];
   memos: Memo[];
+  masterItems?: MasterItem[];
 }

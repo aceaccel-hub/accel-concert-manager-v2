@@ -150,6 +150,7 @@ export async function exportAllData(): Promise<BackupBundle> {
     documents,
     checklists,
     memos,
+    masterItems,
   ] = await Promise.all([
     db.concerts.toArray(),
     db.repertoire.toArray(),
@@ -164,6 +165,7 @@ export async function exportAllData(): Promise<BackupBundle> {
     db.documents.toArray(),
     db.checklists.toArray(),
     db.memos.toArray(),
+    db.masterItems.toArray(),
   ]);
 
   return {
@@ -182,6 +184,7 @@ export async function exportAllData(): Promise<BackupBundle> {
     documents,
     checklists,
     memos,
+    masterItems,
   };
 }
 
@@ -211,6 +214,7 @@ export async function importAllData(bundle: BackupBundle): Promise<void> {
       db.documents,
       db.checklists,
       db.memos,
+      db.masterItems,
     ],
     async () => {
       await Promise.all([
@@ -227,6 +231,7 @@ export async function importAllData(bundle: BackupBundle): Promise<void> {
         db.documents.clear(),
         db.checklists.clear(),
         db.memos.clear(),
+        db.masterItems.clear(),
       ]);
 
       await Promise.all([
@@ -243,6 +248,7 @@ export async function importAllData(bundle: BackupBundle): Promise<void> {
         db.documents.bulkAdd(bundle.documents ?? []),
         db.checklists.bulkAdd(bundle.checklists ?? []),
         db.memos.bulkAdd(bundle.memos ?? []),
+        db.masterItems.bulkAdd(bundle.masterItems ?? []),
       ]);
     }
   );
