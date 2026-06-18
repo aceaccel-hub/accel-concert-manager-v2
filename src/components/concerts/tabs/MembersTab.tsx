@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Trash2, UserPlus, Edit2 } from 'lucide-react';
-import type { ConcertMember, Member, MemberRole, PositionAssignment } from '../../../types';
+import type { Concert, ConcertMember, Member, MemberRole, PositionAssignment } from '../../../types';
 import Modal from '../../common/Modal';
 import Combobox from '../../common/Combobox';
 import { showToast } from '../../common/Toast';
@@ -21,6 +21,14 @@ import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '..
 import type { ConcertTabContext } from '../ConcertDetail';
 
 type ConcertMemberFull = ConcertMember & { member: Member };
+
+type RecentPerformance = {
+  concertId: string;
+  title: string;
+  date: string;
+  instrument: string;
+  fee?: number;
+};
 
 type PositionSeatDefinition = {
   id: string;
@@ -142,7 +150,96 @@ const INSTRUMENT_SORT_ORDER: Record<string, number> = {
 };
 
 const getInstrumentSortIndex = (instrument: string): number => {
-  return INSTRUMENT_SORT_ORDER[instrument] ?? 999;
+  const normalized = normalizeInstrumentName(instrument);
+  const compact = String(instrument ?? '').trim().toLowerCase().replace(/[\s._-]+/g, '');
+
+  if (['지휘', 'conductor'].some((value) => compact.includes(value))) return -1;
+  if (['violin1', 'violini', '1stviolin', 'vn1', 'v1'].some((value) => compact.includes(value))) return 0;
+  if (['violin2', 'violinii', '2ndviolin', 'vn2', 'v2'].some((value) => compact.includes(value))) return 1;
+  if (['violin', 'vn', '바이올린'].some((value) => compact.includes(value))) return 0;
+  if (['viola', 'va', '비올라'].some((value) => compact.includes(value))) return 2;
+  if (['vcello', 'cello', 'violoncello', 'vc', '첼로'].some((value) => compact.includes(value))) return 3;
+  if (['cbass', 'contrabass', 'doublebass', 'db', '더블베이스', '콘트라베이스'].some((value) => compact.includes(value))) return 4;
+
+  return INSTRUMENT_SORT_ORDER[normalized] ?? INSTRUMENT_SORT_ORDER[instrument] ?? 999;
+};
+
+const getConcertMemberInstrument = (cm: ConcertMemberFull): string =>
+  normalizeInstrumentName(cm.assignedInstrument || cm.instrument || cm.member?.instrument) || '';
+
+const getConcertMemberPart = (cm: ConcertMemberFull): string =>
+  cm.assignedPart || cm.part || cm.member?.part || '';
+
+const sortConcertMemberFulls = (items: ConcertMemberFull[]): ConcertMemberFull[] =>
+  [...items].sort((a, b) => {
+    const instrumentDiff =
+      getInstrumentSortIndex(getConcertMemberInstrument(a)) - getInstrumentSortIndex(getConcertMemberInstrument(b));
+    if (instrumentDiff !== 0) return instrumentDiff;
+
+    const partDiff = getConcertMemberPart(a).localeCompare(getConcertMemberPart(b), 'ko', { numeric: true });
+    if (partDiff !== 0) return partDiff;
+
+    return (a.member?.name ?? '').localeCompare(b.member?.name ?? '', 'ko');
+  });
+
+const sortMembersForSelection = (items: Member[]): Member[] =>
+  [...items].sort((a, b) => {
+    const instrumentDiff = getInstrumentSortIndex(a.instrument) - getInstrumentSortIndex(b.instrument);
+    if (instrumentDiff !== 0) return instrumentDiff;
+
+    const partDiff = (a.part ?? '').localeCompare(b.part ?? '', 'ko', { numeric: true });
+    if (partDiff !== 0) return partDiff;
+
+    return a.name.localeCompare(b.name, 'ko');
+  });
+
+const buildRecentPerformanceMap = (
+  currentConcertId: string,
+  allConcertMembers: ConcertMember[],
+  concerts: Concert[]
+): Map<string, RecentPerformance[]> => {
+  const concertById = new Map(concerts.map((concert) => [concert.id, concert]));
+  const grouped = new Map<string, RecentPerformance[]>();
+
+  allConcertMembers.forEach((cm) => {
+    if (cm.concertId === currentConcertId) return;
+
+    const concert = concertById.get(cm.concertId);
+    if (!concert) return;
+
+    const current = grouped.get(cm.memberId) ?? [];
+    current.push({
+      concertId: cm.concertId,
+      title: concert.title,
+      date: concert.date,
+      instrument: normalizeInstrumentName(cm.assignedInstrument || cm.instrument) || cm.assignedInstrument || cm.instrument || '',
+      fee: cm.fee,
+    });
+    grouped.set(cm.memberId, current);
+  });
+
+  grouped.forEach((items, memberId) => {
+    grouped.set(
+      memberId,
+      items
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 3)
+    );
+  });
+
+  return grouped;
+};
+
+const formatRecentPerformance = (history: RecentPerformance[] | undefined): string => {
+  if (!history || history.length === 0) return '-';
+  return history
+    .map((item) => {
+      const date = item.date ? item.date.slice(0, 10) : '날짜 미정';
+      const instrument = item.instrument ? ` · ${item.instrument}` : '';
+      const fee = item.fee ? ` · ${item.fee.toLocaleString()}원` : '';
+      return `${date} ${item.title}${instrument}${fee}`;
+    })
+    .join(' / ');
 };
 
 const getPositionSectionName = (seat: PositionSeatDefinition) => {
@@ -491,11 +588,13 @@ function EditModal({
 
 function MemberRow({
   cm,
+  recentHistory,
   onEdit,
   onRemove,
   onReload,
 }: {
   cm: ConcertMemberFull;
+  recentHistory?: RecentPerformance[];
   onEdit: () => void;
   onRemove: () => void;
   onReload: () => void;
@@ -542,6 +641,11 @@ function MemberRow({
       <td className="px-4 py-3 text-right text-gray-700 text-sm">
         {cm.fee ? `${cm.fee.toLocaleString()}원` : '-'}
       </td>
+      <td className="px-4 py-3 text-gray-500 text-xs max-w-[260px]">
+        <span className="line-clamp-2" title={formatRecentPerformance(recentHistory)}>
+          {formatRecentPerformance(recentHistory)}
+        </span>
+      </td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.bankName || cm.member?.bankName || '-'}</td>
       <td className="px-4 py-3 text-gray-600 text-sm">{cm.bankAccount || cm.member?.bankAccount || '-'}</td>
       <td className="px-4 py-3 text-center">
@@ -581,15 +685,19 @@ export default function MembersTab() {
   const [editTarget, setEditTarget] = useState<ConcertMemberFull | null>(null);
   const [showPositionChart, setShowPositionChart] = useState(false);
   const [positionMemberIds, setPositionMemberIds] = useState<string[]>([]);
+  const [recentPerformanceMap, setRecentPerformanceMap] = useState<Map<string, RecentPerformance[]>>(new Map());
 
   const load = async () => {
-    const [cms, all, savedConcert] = await Promise.all([
+    const [cms, all, savedConcert, allConcertMembers, concerts] = await Promise.all([
       getConcertMembers(concertId),
       getAllMembers(),
       db.concerts.get(concertId),
+      db.concertMembers.toArray(),
+      db.concerts.toArray(),
     ]);
     setConcertMembers(cms);
     setAllMembers(all);
+    setRecentPerformanceMap(buildRecentPerformanceMap(concertId, allConcertMembers, concerts));
     const savedMemberIds = savedConcert?.selectedMusicians?.map((m) => m.musicianId) ?? [];
     if (savedMemberIds.length > 0) {
       setPositionMemberIds(savedMemberIds);
@@ -618,20 +726,13 @@ export default function MembersTab() {
   const regularCount = concertMembers.filter((m) => !m.isReserve).length;
   const reserveCount = concertMembers.filter((m) => m.isReserve).length;
 
-  const filtered = concertMembers
-    .filter((m) => {
+  const filtered = sortConcertMemberFulls(
+    concertMembers.filter((m) => {
       if (reserveFilter === '정단원') return !m.isReserve;
       if (reserveFilter === '예비단원') return m.isReserve;
       return true;
     })
-    .sort((a, b) => {
-      // 포지션 차트의 악기 순서를 따름 (우선순위: 포지션 > 연주회 특화 > 기본)
-      const aInstrument = normalizeInstrumentName(a.assignedInstrument || a.instrument || a.member?.instrument);
-      const bInstrument = normalizeInstrumentName(b.assignedInstrument || b.instrument || b.member?.instrument);
-      const aSortIndex = getInstrumentSortIndex(aInstrument);
-      const bSortIndex = getInstrumentSortIndex(bInstrument);
-      return aSortIndex - bSortIndex;
-    });
+  );
 
   const positionMembers = concertMembers.filter((cm) => {
     const targetIds = positionMemberIds.length > 0 ? positionMemberIds : concertMembers.map((m) => m.memberId);
@@ -704,6 +805,13 @@ export default function MembersTab() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="font-semibold">⭐ 포지션 차트 후 → 정렬 보기로</p>
+        <p className="mt-1 text-xs text-amber-800">
+          아래 단원 목록은 DB에서 가져온 뒤 Vn → Va → Vc → DB 순서로 정렬되며, 각 단원의 최근 연주 이력도 함께 표시됩니다.
+        </p>
+      </div>
+
       {filtered.length === 0 ? (
         <div className="card p-12 text-center text-gray-400">
           <p>등록된 단원이 없습니다.</p>
@@ -721,6 +829,7 @@ export default function MembersTab() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">주민등록번호</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">출석률</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">사례비</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">최근 이력</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">은행명</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">계좌번호</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">예비</th>
@@ -732,6 +841,7 @@ export default function MembersTab() {
                 <MemberRow
                   key={cm.id}
                   cm={cm}
+                  recentHistory={recentPerformanceMap.get(cm.memberId)}
                   onEdit={() => setEditTarget(cm)}
                   onRemove={() => setRemoveTarget(cm)}
                   onReload={load}
@@ -756,6 +866,7 @@ export default function MembersTab() {
           concertId={concertId}
           existing={concertMembers.map((cm) => cm.memberId)}
           allMembers={allMembers}
+          recentPerformanceMap={recentPerformanceMap}
           onClose={() => setShowAdd(false)}
           onSaved={handleMembersSelected}
         />
@@ -1181,16 +1292,18 @@ function AddMemberFromDB({
   concertId,
   existing,
   allMembers,
+  recentPerformanceMap,
   onClose,
   onSaved,
 }: {
   concertId: string;
   existing: string[];
   allMembers: Member[];
+  recentPerformanceMap: Map<string, RecentPerformance[]>;
   onClose: () => void;
   onSaved: (memberIds: string[]) => void;
 }) {
-  const available = allMembers.filter((m) => !existing.includes(m.id));
+  const available = sortMembersForSelection(allMembers.filter((m) => !existing.includes(m.id)));
   const [selected, setSelected] = useState<string[]>([]);
 
   const handleAdd = async () => {
@@ -1231,7 +1344,7 @@ function AddMemberFromDB({
       ) : (
         <div className="space-y-2 max-h-80 overflow-y-auto">
           <p className="text-xs text-gray-500 mb-2">
-            이번 연주회에 참여할 단원을 먼저 선택하세요. 선택 완료 후 포지션 차트가 열립니다.
+            이번 연주회에 참여할 단원을 먼저 선택하세요. Vn → Va → Vc → DB 순서로 정렬되어 있고, 선택 완료 후 포지션 차트가 열립니다.
           </p>
           {available.map((m) => (
             <label key={m.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
@@ -1239,7 +1352,10 @@ function AddMemberFromDB({
                 <input type="checkbox" checked={selected.includes(m.id)} onChange={() => setSelected((s) => (s.includes(m.id) ? s.filter((x) => x !== m.id) : [...s, m.id]))} className="rounded" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">{m.name}</p>
-                  <p className="text-xs text-gray-500">{m.instrument} · {m.part} · {m.role}</p>
+                  <p className="text-xs text-gray-500">{normalizeInstrumentName(m.instrument) || m.instrument} · {m.part || '-'} · {m.role}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    최근 이력: {formatRecentPerformance(recentPerformanceMap.get(m.id))}
+                  </p>
                 </div>
               </div>
               <div className="text-right flex-shrink-0">
