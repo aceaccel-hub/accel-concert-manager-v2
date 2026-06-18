@@ -200,13 +200,25 @@ export function startAutoCloudSync(): AutoSyncController {
     void syncNow();
   };
 
+  const syncWhenOnline = () => {
+    void syncNow();
+  };
+
+  const syncWhenVisible = () => {
+    if (document.visibilityState === 'visible') void syncNow();
+  };
+
   window.addEventListener('accel-cloud-sync-settings-changed', startTimer);
+  window.addEventListener('online', syncWhenOnline);
+  document.addEventListener('visibilitychange', syncWhenVisible);
   startTimer();
 
   controller = {
     stop: () => {
       if (timer !== null) window.clearInterval(timer);
       window.removeEventListener('accel-cloud-sync-settings-changed', startTimer);
+      window.removeEventListener('online', syncWhenOnline);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
       controller = null;
     },
     syncNow,

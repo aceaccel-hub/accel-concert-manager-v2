@@ -1,0 +1,19 @@
+{
+  "name": "아첼 연주회관리프로그램",
+  "short_name": "아첼 연주회",
+  "description": "오프라인 저장과 클라우드 동기화를 지원하는 연주회 관리 프로그램",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f0f4fa",
+  "theme_color": "#1e2b4d",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

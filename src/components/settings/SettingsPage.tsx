@@ -309,6 +309,29 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* iPad 오프라인 사용 */}
+        <section className="card p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+            <h2 className="text-sm font-semibold text-gray-700">iPad 오프라인 사용</h2>
+            <span className="badge bg-green-50 text-green-700">오프라인 저장 가능</span>
+          </div>
+          <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-3 text-xs text-blue-900 leading-relaxed">
+            Safari에서 이 웹사이트를 한 번 연 뒤 <span className="font-semibold">공유 버튼 → 홈 화면에 추가</span>를
+            누르면 iPad 앱처럼 사용할 수 있습니다. 인터넷이 없는 장소에서는 단말기 안에 먼저 저장되고,
+            인터넷이 다시 연결되면 자동 동기화가 실행됩니다.
+          </div>
+          <ol className="list-decimal list-inside space-y-1.5 text-sm text-gray-600">
+            <li>인터넷이 되는 곳에서 웹사이트를 한 번 열고 로그인/동기화 코드를 저장합니다.</li>
+            <li>Safari 공유 버튼에서 홈 화면에 추가를 누릅니다.</li>
+            <li>인터넷이 없는 곳에서는 홈 화면 아이콘으로 열어 입력합니다.</li>
+            <li>인터넷이 다시 연결되면 앱을 열어둔 상태에서 변경 내역이 클라우드로 올라갑니다.</li>
+          </ol>
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            같은 시간에 여러 기기에서 같은 데이터를 서로 다르게 수정하면 마지막으로 동기화된 내용이 기준이 됩니다.
+            중요한 입력 전후에는 설정의 연결 확인이나 클라우드로 올리기를 한 번 눌러 확인해 주세요.
+          </p>
+        </section>
+
 
         {/* 데이터 관리 */}
         <section className="card p-6 space-y-4">
@@ -363,7 +386,8 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-2 text-sm text-gray-600">
             <p>버전: Accel Concert Manager v1.0</p>
-            <p>저장소: IndexedDB (로컬 캐시) + Vercel Blob 클라우드 동기화</p>
+            <p>저장소: IndexedDB (오프라인 저장) + Vercel Blob 클라우드 동기화</p>
+            <p>오프라인 실행: PWA 서비스워커 캐시</p>
             <p>스택: React 19 · React Router 7 · Zustand · Dexie · Tailwind 4 · Vercel Blob</p>
           </div>
         </section>

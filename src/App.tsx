@@ -4,6 +4,7 @@ import Sidebar from './components/layout/Sidebar';
 import ToastContainer from './components/common/Toast';
 import { initSampleData } from './db/database';
 import { startAutoCloudSync } from './services/autoCloudSync';
+import { registerPwaServiceWorker } from './services/pwa';
 
 export default function App() {
   useEffect(() => {
@@ -13,6 +14,7 @@ export default function App() {
     });
 
     const autoSync = startAutoCloudSync();
+    registerPwaServiceWorker();
     return () => autoSync.stop();
   }, []);
 
