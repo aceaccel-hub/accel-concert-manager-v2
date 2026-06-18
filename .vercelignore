@@ -18,6 +18,7 @@ src/.DS_Store
 *.exe
 *.blockmap
 *.pkg
+accel_backup_*.json
 
 /*.docx
 /*.xlsx

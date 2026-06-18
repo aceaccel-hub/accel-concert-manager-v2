@@ -35,3 +35,4 @@ _git-backup-patches/
 *.sw?
 .vercel
 .env*
+accel_backup_*.json
