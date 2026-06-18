@@ -33,3 +33,5 @@ _git-backup-patches/
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*
