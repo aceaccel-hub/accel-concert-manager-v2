@@ -44,6 +44,7 @@ export function saveCloudSyncSettings(settings: CloudSyncSettings): void {
       token: settings.token.trim(),
     })
   );
+  window.dispatchEvent(new Event('accel-cloud-sync-settings-changed'));
 }
 
 export function isCloudSyncConfigured(settings = getCloudSyncSettings()): boolean {

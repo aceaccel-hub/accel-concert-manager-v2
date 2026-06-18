@@ -246,7 +246,7 @@ export default function SettingsPage() {
         <section className="card p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <h2 className="text-sm font-semibold text-gray-700">클라우드 DB</h2>
-            <span className="badge bg-blue-50 text-blue-700">Vercel Blob</span>
+            <span className="badge bg-blue-50 text-blue-700">자동 동기화</span>
           </div>
           <div className="grid grid-cols-1 gap-4">
             <div>
@@ -258,7 +258,7 @@ export default function SettingsPage() {
                 onChange={(e) => setCloud('endpoint', e.target.value)}
               />
               <p className="text-xs text-gray-400 mt-1">
-                Vercel에 배포한 사이트에서는 기본값 /api/cloud-state 를 그대로 사용할 수 있습니다.
+                Vercel 웹사이트에서는 기본값 /api/cloud-state 를 그대로 사용할 수 있습니다.
               </p>
             </div>
             <div>
@@ -302,9 +302,10 @@ export default function SettingsPage() {
             </button>
           </div>
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
-            기존 데이터가 있는 컴퓨터에서 먼저 클라우드로 올리고, 다른 컴퓨터에서는 클라우드에서
-            불러오기를 누르세요. 동시에 여러 사람이 같은 항목을 수정하는 실시간 공동 편집은 다음
-            단계에서 충돌 방지 규칙을 추가해야 합니다.
+            동기화 코드를 저장하면 앱이 켜져 있는 동안 약 8초 간격으로 자동 동기화합니다.
+            새 컴퓨터에서는 처음 한 번 클라우드에서 불러오기를 눌러 기준 데이터를 맞추면,
+            이후 변경사항은 자동으로 올라가고 내려옵니다. 동시에 같은 항목을 수정하면 마지막으로
+            저장된 변경이 기준이 됩니다.
           </div>
         </section>
 

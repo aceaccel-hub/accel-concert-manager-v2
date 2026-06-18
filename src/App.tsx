@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import ToastContainer from './components/common/Toast';
 import { initSampleData } from './db/database';
+import { startAutoCloudSync } from './services/autoCloudSync';
 
 export default function App() {
   useEffect(() => {
@@ -10,6 +11,9 @@ export default function App() {
     initSampleData().catch((err) => {
       console.error('Failed to initialize sample data:', err);
     });
+
+    const autoSync = startAutoCloudSync();
+    return () => autoSync.stop();
   }, []);
 
   return (
