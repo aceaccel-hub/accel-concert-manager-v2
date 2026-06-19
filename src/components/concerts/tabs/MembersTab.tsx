@@ -129,62 +129,156 @@ const POSITION_SEATS = POSITION_SECTIONS.flatMap((section) => section.seats);
 
 const SECTION_DISPLAY_NAMES: Record<string, string> = {
   Conductor: '지휘',
-  Soloist: '협연',
+  Soloist: '협연자',
   Arranger: '편곡',
   '1st Violin': 'Violin I',
   '2nd Violin': 'Violin II',
   Viola: 'Viola',
-  Cello: 'Cello',
-  'Double Bass': 'Double Bass',
+  Cello: 'V.Cello',
+  'Double Bass': 'C.Bass',
 };
 
-// 악기 정렬 순서 (포지션 차트 기준)
-const INSTRUMENT_SORT_ORDER: Record<string, number> = {
-  '지휘': -1,
-  'Conductor': -1,
-  'Violin I': 0,
-  'Violin II': 1,
-  'Viola': 2,
-  'V.Cello': 3,
-  'C.Bass': 4,
-  'Flute': 5,
-  'Piccolo': 6,
-  'Oboe': 7,
-  'English Horn': 8,
-  'Clarinet': 9,
-  'Bass Clarinet': 10,
-  'Bassoon': 11,
-  'Contrabassoon': 12,
-  'Horn': 13,
-  'Trumpet': 14,
-  'Trombone': 15,
-  'Tuba': 16,
-  'Timpani': 17,
-  'Percussion': 18,
-  'Piano': 19,
-  'Harp': 20,
+const POSITION_PART_ORDER = [
+  '지휘',
+  '협연자',
+  '편곡',
+  'Violin I',
+  'Violin II',
+  'Viola',
+  'V.Cello',
+  'C.Bass',
+  'Flute',
+  'Piccolo',
+  'Oboe',
+  'English Horn',
+  'Clarinet',
+  'Bass Clarinet',
+  'Bassoon',
+  'Contrabassoon',
+  'Horn',
+  'Trumpet',
+  'Trombone',
+  'Tuba',
+  'Timpani',
+  'Percussion',
+  'Bass Drum',
+  'Cymbals',
+  'Side Drum',
+  'Triangle',
+  'Tambourine',
+  'Gong',
+  'Piano',
+  'Harp',
+  'Organ',
+  'Celesta',
+];
+
+const POSITION_PART_SORT_ORDER = POSITION_PART_ORDER.reduce<Record<string, number>>((acc, part, index) => {
+  acc[part] = index;
+  return acc;
+}, {});
+
+const ROLE_SEAT_SORT_ORDER: Record<string, number> = {
+  지휘자: -30,
+  협연자: -30,
+  편곡자: -30,
+  악장: -20,
+  수석: -10,
+  부수석: -5,
 };
 
-const getInstrumentSortIndex = (instrument: string): number => {
-  const normalized = normalizeInstrumentName(instrument);
-  const compact = String(instrument ?? '').trim().toLowerCase().replace(/[\s._-]+/g, '');
+const BROAD_POSITION_GROUPS = new Set(['Woodwind', 'Brass', 'Percussion', 'Keyboard / Etc']);
 
-  if (['지휘', 'conductor'].some((value) => compact.includes(value))) return -1;
-  if (['violin1', 'violini', '1stviolin', 'vn1', 'v1'].some((value) => compact.includes(value))) return 0;
-  if (['violin2', 'violinii', '2ndviolin', 'vn2', 'v2'].some((value) => compact.includes(value))) return 1;
-  if (['violin', 'vn', '바이올린'].some((value) => compact.includes(value))) return 0;
-  if (['viola', 'va', '비올라'].some((value) => compact.includes(value))) return 2;
-  if (['vcello', 'cello', 'violoncello', 'vc', '첼로'].some((value) => compact.includes(value))) return 3;
-  if (['cbass', 'contrabass', 'doublebass', 'db', '더블베이스', '콘트라베이스'].some((value) => compact.includes(value))) return 4;
+const stripPositionNumber = (label: string) => label.replace(/\s+\d+$/, '').trim();
 
-  return INSTRUMENT_SORT_ORDER[normalized] ?? INSTRUMENT_SORT_ORDER[instrument] ?? 999;
+const normalizePositionPartName = (value: string | undefined, seatLabel = ''): string => {
+  const raw = String(value || '').trim();
+
+  if (BROAD_POSITION_GROUPS.has(raw) && seatLabel) {
+    return normalizePositionPartName(stripPositionNumber(seatLabel));
+  }
+
+  const normalized = SECTION_DISPLAY_NAMES[raw] || normalizeInstrumentName(raw) || raw;
+
+  const aliases: Record<string, string> = {
+    Conductor: '지휘',
+    Soloist: '협연자',
+    협연: '협연자',
+    Arranger: '편곡',
+    '1st Violin': 'Violin I',
+    'Violin 1': 'Violin I',
+    '2nd Violin': 'Violin II',
+    'Violin 2': 'Violin II',
+    Cello: 'V.Cello',
+    Bass: 'C.Bass',
+    'Double Bass': 'C.Bass',
+    'Keyboard / Etc': 'Piano',
+  };
+
+  return aliases[normalized] || normalized;
+};
+
+const getPositionSectionDisplayName = (seat: PositionSeatDefinition) =>
+  SECTION_DISPLAY_NAMES[seat.section] || normalizePositionPartName(stripPositionNumber(seat.label));
+
+const POSITION_SEAT_SORT_ORDER = POSITION_SEATS.reduce<Record<string, number>>((acc, seat, index) => {
+  const sectionName = getPositionSectionDisplayName(seat);
+  acc[`${sectionName}__${seat.label}`] = index;
+  return acc;
+}, {});
+
+const getInstrumentNameForPart = (part: string) => {
+  if (part === 'Violin I' || part === 'Violin II') return 'Violin';
+  if (part === '지휘' || part === '협연자' || part === '편곡') return part;
+  return part || '-';
+};
+
+const getConcertMemberPlacement = (cm: ConcertMemberFull) => {
+  const fallback = normalizeInstrumentPartSelection(
+    cm.instrument || cm.member?.instrument,
+    cm.part || cm.member?.part
+  );
+
+  const assignedPart = normalizePositionPartName(
+    cm.assignedPart || cm.assignedInstrument,
+    cm.assignedSeat || ''
+  );
+  const fallbackPart = normalizePositionPartName(fallback.part || fallback.instrument);
+  const part = cm.isAssigned ? assignedPart || fallbackPart : fallbackPart;
+
+  return {
+    instrument: getInstrumentNameForPart(part),
+    part,
+  };
+};
+
+const getPositionPartSortIndex = (part: string) => POSITION_PART_SORT_ORDER[normalizePositionPartName(part)] ?? 999;
+
+const getSeatSortIndex = (cm: ConcertMemberFull): number => {
+  const part = getConcertMemberPlacement(cm).part;
+  const seat = cm.assignedSeat || '';
+  const exactSeatIndex = POSITION_SEAT_SORT_ORDER[`${part}__${seat}`];
+  if (exactSeatIndex != null) return exactSeatIndex;
+  if (ROLE_SEAT_SORT_ORDER[seat] != null) return ROLE_SEAT_SORT_ORDER[seat];
+
+  const deskMatch = seat.match(/^(\d+)\s*(in|out)?$/i);
+  if (deskMatch) {
+    const desk = Number(deskMatch[1]);
+    const side = deskMatch[2]?.toLowerCase();
+    return desk * 10 + (side === 'out' ? 1 : 0);
+  }
+
+  const numberedSeat = seat.match(/(\d+)$/);
+  if (numberedSeat) return Number(numberedSeat[1]) * 10;
+
+  return 999;
 };
 
 const getConcertMemberInstrument = (cm: ConcertMemberFull): string =>
-  normalizeInstrumentName(cm.assignedInstrument || cm.instrument || cm.member?.instrument) || '';
+  getConcertMemberPlacement(cm).instrument;
 
 const getConcertMemberPart = (cm: ConcertMemberFull): string =>
-  cm.assignedPart || cm.part || cm.member?.part || '';
+  getConcertMemberPlacement(cm).part;
 
 const ROLE_SORT_ORDER: Record<string, number> = {
   지휘자: -2,
@@ -205,9 +299,12 @@ const getRoleSortIndex = (role: string): number => ROLE_SORT_ORDER[role] ?? 50;
 
 const sortConcertMemberFulls = (items: ConcertMemberFull[]): ConcertMemberFull[] =>
   [...items].sort((a, b) => {
-    const instrumentDiff =
-      getInstrumentSortIndex(getConcertMemberInstrument(a)) - getInstrumentSortIndex(getConcertMemberInstrument(b));
-    if (instrumentDiff !== 0) return instrumentDiff;
+    const partOrderDiff =
+      getPositionPartSortIndex(getConcertMemberPart(a)) - getPositionPartSortIndex(getConcertMemberPart(b));
+    if (partOrderDiff !== 0) return partOrderDiff;
+
+    const seatDiff = getSeatSortIndex(a) - getSeatSortIndex(b);
+    if (seatDiff !== 0) return seatDiff;
 
     const roleDiff = getRoleSortIndex(getConcertMemberRole(a)) - getRoleSortIndex(getConcertMemberRole(b));
     if (roleDiff !== 0) return roleDiff;
@@ -220,11 +317,12 @@ const sortConcertMemberFulls = (items: ConcertMemberFull[]): ConcertMemberFull[]
 
 const sortMembersForSelection = (items: Member[]): Member[] =>
   [...items].sort((a, b) => {
-    const instrumentDiff = getInstrumentSortIndex(a.instrument) - getInstrumentSortIndex(b.instrument);
-    if (instrumentDiff !== 0) return instrumentDiff;
-
-    const partDiff = (a.part ?? '').localeCompare(b.part ?? '', 'ko', { numeric: true });
-    if (partDiff !== 0) return partDiff;
+    const aPlacement = normalizeInstrumentPartSelection(a.instrument, a.part);
+    const bPlacement = normalizeInstrumentPartSelection(b.instrument, b.part);
+    const partOrderDiff =
+      getPositionPartSortIndex(aPlacement.part || aPlacement.instrument) -
+      getPositionPartSortIndex(bPlacement.part || bPlacement.instrument);
+    if (partOrderDiff !== 0) return partOrderDiff;
 
     return a.name.localeCompare(b.name, 'ko');
   });
@@ -279,8 +377,7 @@ const formatRecentPerformance = (history: RecentPerformance[] | undefined): stri
 };
 
 const getPositionSectionName = (seat: PositionSeatDefinition) => {
-  if (SECTION_DISPLAY_NAMES[seat.section]) return SECTION_DISPLAY_NAMES[seat.section];
-  return seat.label.replace(/\s+\d+$/, '');
+  return getPositionSectionDisplayName(seat);
 };
 
 const getPositionLabel = (seat: PositionSeatDefinition) => seat.label;
@@ -648,14 +745,19 @@ function MemberRow({
     'Violin II': 'bg-indigo-50 text-indigo-700',
     Viola: 'bg-purple-50 text-purple-700',
     Cello: 'bg-pink-50 text-pink-700',
+    'V.Cello': 'bg-pink-50 text-pink-700',
     Bass: 'bg-rose-50 text-rose-700',
     'Double Bass': 'bg-rose-50 text-rose-700',
+    'C.Bass': 'bg-rose-50 text-rose-700',
+    지휘: 'bg-amber-50 text-amber-700',
+    협연자: 'bg-emerald-50 text-emerald-700',
+    편곡: 'bg-slate-100 text-slate-700',
   };
 
   // 표시 우선순위: 포지션 저장값 > 미배치 > 기존 DB 값
-  const instrumentValue = cm.assignedInstrument || cm.member?.instrument;
-  const instrument = normalizeInstrumentName(instrumentValue) || '-';
-  const part = cm.isAssigned ? (cm.assignedPart || '-') : '미배치';
+  const placement = getConcertMemberPlacement(cm);
+  const instrument = placement.instrument || '-';
+  const part = placement.part || '-';
   const role = cm.isAssigned ? (cm.assignedRole || '-') : '미배치';
   const seat = cm.isAssigned ? (cm.assignedSeat || '-') : '미배치';
   const partColor = partColors[part] || (part === '미배치' ? 'bg-gray-100 text-gray-500' : 'bg-gray-50 text-gray-600');
@@ -670,7 +772,7 @@ function MemberRow({
       </td>
       <td className="px-4 py-3">
         <span className={`badge text-xs ${partColor}`}>
-          {instrument === '-' && part === '미배치' ? '미배치' : `${instrument} - ${part}`}
+          {instrument === '-' && part === '-' ? '미배치' : `${instrument} - ${part}`}
         </span>
       </td>
       <td className="px-4 py-3 text-gray-600 text-sm">{role}</td>
@@ -760,10 +862,13 @@ export default function MembersTab() {
 
   const groupByPart: Record<string, ConcertMemberFull[]> = {};
   concertMembers.forEach((cm) => {
-    const part = cm.part || cm.member?.part || '기타';
+    const part = getConcertMemberPart(cm) || '기타';
     if (!groupByPart[part]) groupByPart[part] = [];
     groupByPart[part].push(cm);
   });
+  const sortedPartGroups = Object.entries(groupByPart).sort(
+    ([a], [b]) => getPositionPartSortIndex(a) - getPositionPartSortIndex(b)
+  );
 
   const regularCount = concertMembers.filter((m) => !m.isReserve).length;
   const reserveCount = concertMembers.filter((m) => m.isReserve).length;
@@ -818,7 +923,7 @@ export default function MembersTab() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {Object.entries(groupByPart).map(([part, mbs]) => (
+        {sortedPartGroups.map(([part, mbs]) => (
           <span key={part} className="badge bg-gray-100 text-gray-600">
             {part}: {mbs.filter((m) => !m.isReserve).length}명
           </span>
@@ -850,7 +955,7 @@ export default function MembersTab() {
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <p className="font-semibold">⭐ 포지션 차트 후 → 정렬 보기로</p>
         <p className="mt-1 text-xs text-amber-800">
-          아래 단원 목록은 DB에서 가져온 뒤 Vn → Va → Vc → DB 순서로 정렬되며, 각 단원의 최근 연주 이력도 함께 표시됩니다.
+          아래 단원 목록은 포지션 차트 기준으로 지휘 → 협연자 → 편곡 → Violin I → Violin II → Viola → V.Cello → C.Bass 순서로 정렬됩니다.
         </p>
       </div>
 
