@@ -1494,39 +1494,87 @@ const DEFAULT_INSTRUMENTS = [
   '기타',
 ];
 
-const DEFAULT_RECRUITMENT_NOTICE_TEMPLATE = `선생님 안녕하세요. ^^
+// 날짜 포맷팅 헬퍼 함수들
+const formatDateKorean = (dateStr: string): string => {
+  const date = new Date(dateStr + 'T00:00:00');
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayName = dayNames[date.getDay()];
+  return `${month}월 ${day}일(${dayName})`;
+};
 
-• *제45회 아첼청소년오케스트라 정기연주회
+const formatTimeKorean = (timeStr: string): string => {
+  const [hours, minutes] = timeStr.split(':');
+  const h = parseInt(hours);
+  const period = h >= 12 ? '오후' : '오전';
+  const displayHours = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${period} ${displayHours}:${minutes}`;
+};
 
-「어울림 음악회」**에 함께 연주해 주실 객원 선생님을 모시고자 연락드립니다.
+const generateRecruitmentNotice = (concert: Concert): string => {
+  const concertDate = formatDateKorean(concert.date);
+  const concertTime = formatTimeKorean(concert.time);
+
+  return `선생님 안녕하세요. ^^
+
+「${concert.title}」에 함께 연주해 주실 객원 선생님을 모시고자 연락드립니다.
 
 가능하시면 함께해 주시면 감사하겠습니다.
 
 [연주 일정]
 
-• 연주일: 3월 15일(일) 오후 6:00
+• 연주일: ${concertDate} ${concertTime}
 
-• 장소: 별모래극장
+• 장소: ${concert.place}
 
-• 당일 리허설: 오후 1:30
+• 당일 리허설: (리허설 시간을 입력해 주세요)
 
 • 복장: 검정 하의, 흰색 긴팔 상의
 
 [전체 리허설]
 
-• 3월 8일(일) 오후 5:00 ~ 8:00
+• (전체 리허설 일정을 입력해 주세요)
 
-장소: 아첼뮤직아트홀
-
-주소: 덕양구 백양로 142-8, 지층
-
-• 3월 14일(토) 오후 3:00 ~ 6:00
-
-장소: 아첼뮤직아트홀
+장소: (리허설 장소를 입력해 주세요)
 
 [사례비]
 
-• 200,000원
+• (사례비를 입력해 주세요)
+
+일정 가능하실까요?
+
+검토 부탁드립니다.
+
+
+감사합니다. 😊`;
+};
+
+const DEFAULT_RECRUITMENT_NOTICE_TEMPLATE = `선생님 안녕하세요. ^^
+
+제 아첼청소년오케스트라 연주회에 함께 연주해 주실 객원 선생님을 모시고자 연락드립니다.
+
+가능하시면 함께해 주시면 감사하겠습니다.
+
+[연주 일정]
+
+• 연주일: (연주 일자와 시간)
+
+• 장소: (공연 장소)
+
+• 당일 리허설: (리허설 시간을 입력해 주세요)
+
+• 복장: 검정 하의, 흰색 긴팔 상의
+
+[전체 리허설]
+
+• (전체 리허설 일정을 입력해 주세요)
+
+장소: (리허설 장소를 입력해 주세요)
+
+[사례비]
+
+• (사례비를 입력해 주세요)
 
 일정 가능하실까요?
 
@@ -1564,6 +1612,9 @@ function RecruitmentNoticeBuilder({
   }, []);
 
   const generatePreview = () => {
+    if (concert && concert.date && concert.time && concert.place && concert.title) {
+      return generateRecruitmentNotice(concert);
+    }
     return DEFAULT_RECRUITMENT_NOTICE_TEMPLATE;
   };
 
