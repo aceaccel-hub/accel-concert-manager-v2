@@ -16,8 +16,12 @@ import {
 } from '../../../hooks/useMembers';
 import { db } from '../../../db/database';
 import { formatNumberInput, parseFormattedNumber } from '../../../utils/calculations';
-import { normalizeInstrumentName, getInstrumentBase, normalizeMemberInstrumentPart } from '../../../utils/normalization';
-import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '../../../constants/memberOptions';
+import {
+  normalizeInstrumentName,
+  getPartOptionsForInstrument,
+  normalizeInstrumentPartSelection,
+} from '../../../utils/normalization';
+import { INSTRUMENT_OPTIONS, ROLE_OPTIONS } from '../../../constants/memberOptions';
 import type { ConcertTabContext } from '../ConcertDetail';
 
 type ConcertMemberFull = ConcertMember & { member: Member };
@@ -385,14 +389,13 @@ function EditModal({
   });
 
   useEffect(() => {
-    const normalized = normalizeMemberInstrumentPart({
-      instrument: cm.instrument || member?.instrument,
-      part: cm.part || member?.part,
-    });
-    const normalizedInstrument = normalizeInstrumentName(normalized.instrument);
+    const normalized = normalizeInstrumentPartSelection(
+      cm.instrument || member?.instrument,
+      cm.part || member?.part
+    );
     setForm({
-      instrument: normalizedInstrument,
-      part: normalized.part || '',
+      instrument: normalized.instrument,
+      part: normalized.part,
       role: (cm.role as MemberRole) || member?.role || '일반단원',
       phone: cm.phone || member?.phone || '',
       email: member?.email || '',
@@ -412,10 +415,12 @@ function EditModal({
   }, [cm, member]);
 
   const handleSave = async () => {
+    const normalized = normalizeInstrumentPartSelection(form.instrument, form.part);
+
     // 연주회 멤버 정보 업데이트
     await db.concertMembers.update(cm.id, {
-      instrument: form.instrument,
-      part: form.part,
+      instrument: normalized.instrument,
+      part: normalized.part,
       role: form.role,
       fee: parseFormattedNumber(form.fee),
       attendanceRate: form.attendanceRate,
@@ -428,8 +433,8 @@ function EditModal({
     // 멤버 기본 정보 업데이트
     if (member) {
       await updateMember(member.id, {
-        instrument: form.instrument,
-        part: form.part,
+        instrument: normalized.instrument,
+        part: normalized.part,
         role: form.role,
         phone: form.phone,
         email: form.email,
@@ -504,15 +509,14 @@ function EditModal({
           <Combobox
             category="instrument"
             value={form.instrument}
-            onChange={(value) => setForm((f) => ({ ...f, instrument: value, part: '' }))}
+            onChange={(value) => setForm((f) => ({ ...f, ...normalizeInstrumentPartSelection(value, f.part) }))}
             defaultOptions={INSTRUMENT_OPTIONS}
           />
         </div>
         <div>
           <label className="label">파트</label>
           {(() => {
-            const instrumentBase = getInstrumentBase(form.instrument);
-            const partOptions = PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+            const partOptions = getPartOptionsForInstrument(form.instrument);
             const isDisabled = partOptions.length === 0;
             return (
               <Combobox
@@ -1395,7 +1399,9 @@ function AddMemberFromDB({
                 <input type="checkbox" checked={selected.includes(m.id)} onChange={() => setSelected((s) => (s.includes(m.id) ? s.filter((x) => x !== m.id) : [...s, m.id]))} className="rounded" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">{m.name}</p>
-                  <p className="text-xs text-gray-500">{normalizeInstrumentName(m.instrument) || m.instrument} · {m.part || '-'} · {m.role}</p>
+                  <p className="text-xs text-gray-500">
+                    {normalizeInstrumentPartSelection(m.instrument, m.part).instrument || '-'} · {normalizeInstrumentPartSelection(m.instrument, m.part).part || '-'} · {m.role}
+                  </p>
                   <p className="mt-1 text-xs text-gray-400">
                     최근 이력: {formatRecentPerformance(recentPerformanceMap.get(m.id))}
                   </p>
@@ -1418,8 +1424,9 @@ function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onC
 
   const handleSave = async () => {
     if (!form.name) { alert('이름을 입력해 주세요.'); return; }
-    const memberId = await createMember({ name: form.name, instrument: form.instrument, part: form.part, role: form.role, phone: form.phone, grade: '정단원', status: '활동중' });
-    await addMemberToConcert(concertId, memberId, { role: form.role, part: form.part, fee: parseFormattedNumber(form.fee), isReserve: false });
+    const normalized = normalizeInstrumentPartSelection(form.instrument, form.part);
+    const memberId = await createMember({ name: form.name, instrument: normalized.instrument, part: normalized.part, role: form.role, phone: form.phone, grade: '정단원', status: '활동중' });
+    await addMemberToConcert(concertId, memberId, { role: form.role, part: normalized.part, fee: parseFormattedNumber(form.fee), isReserve: false });
     onSaved();
   };
 
@@ -1432,15 +1439,14 @@ function NewMemberForm({ concertId, onClose, onSaved }: { concertId: string; onC
           <Combobox
             category="instrument"
             value={form.instrument}
-            onChange={(value) => setForm((f) => ({ ...f, instrument: value, part: '' }))}
+            onChange={(value) => setForm((f) => ({ ...f, ...normalizeInstrumentPartSelection(value, f.part) }))}
             defaultOptions={INSTRUMENT_OPTIONS}
           />
         </div>
         <div>
           <label className="label">파트</label>
           {(() => {
-            const instrumentBase = getInstrumentBase(form.instrument);
-            const partOptions = PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+            const partOptions = getPartOptionsForInstrument(form.instrument);
             const isDisabled = partOptions.length === 0;
             return (
               <Combobox

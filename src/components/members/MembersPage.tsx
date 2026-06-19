@@ -16,7 +16,10 @@ import { db } from '../../db/database';
 import { useStore } from '../../store/store';
 import { getAllConcerts } from '../../hooks/useConcert';
 import { INSTRUMENT_OPTIONS, PART_OPTIONS_BY_INSTRUMENT, ROLE_OPTIONS } from '../../constants/memberOptions';
-import { normalizeInstrumentName, getInstrumentBase, normalizeMemberInstrumentPart } from '../../utils/normalization';
+import {
+  getPartOptionsForInstrument,
+  normalizeInstrumentPartSelection,
+} from '../../utils/normalization';
 
 // 부분 필터 옵션 (모든 parts의 union)
 const PARTS = Array.from(
@@ -53,9 +56,13 @@ export default function MembersPage() {
   }, []);
 
   const filtered = members.filter((m) => {
+    const normalized = normalizeInstrumentPartSelection(m.instrument, m.part);
     const matchSearch =
-      !search || m.name.includes(search) || m.instrument.includes(search) || (m.part ?? '').includes(search);
-    const matchPart = partFilter === '전체' || m.part === partFilter;
+      !search ||
+      m.name.includes(search) ||
+      normalized.instrument.includes(search) ||
+      normalized.part.includes(search);
+    const matchPart = partFilter === '전체' || normalized.part === partFilter;
     const matchStatus = statusFilter === '전체' || m.status === statusFilter;
     return matchSearch && matchPart && matchStatus;
   });
@@ -118,30 +125,33 @@ export default function MembersPage() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {filtered.map((m) => (
-            <div
-              key={m.id}
-              onClick={() => setSelected(m)}
-              className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-                selected?.id === m.id ? 'bg-blue-50' : ''
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
-                    {m.name}
-                    {m.role === '악장' && (
-                      <Star size={12} className="text-yellow-500" fill="currentColor" />
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {m.instrument} · {m.part}
-                  </p>
+          {filtered.map((m) => {
+            const normalized = normalizeInstrumentPartSelection(m.instrument, m.part);
+            return (
+              <div
+                key={m.id}
+                onClick={() => setSelected(m)}
+                className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
+                  selected?.id === m.id ? 'bg-blue-50' : ''
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                      {m.name}
+                      {m.role === '악장' && (
+                        <Star size={12} className="text-yellow-500" fill="currentColor" />
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {normalized.instrument || '-'} · {normalized.part || '-'}
+                    </p>
+                  </div>
+                  <StatusBadge status={m.status} />
                 </div>
-                <StatusBadge status={m.status} />
               </div>
-            </div>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <p className="p-6 text-center text-sm text-gray-400">단원이 없습니다.</p>
           )}
@@ -177,8 +187,8 @@ export default function MembersPage() {
 
             <div className="card p-5 grid grid-cols-2 gap-4">
               {[
-                ['악기', selected.instrument],
-                ['파트', selected.part || '-'],
+                ['악기', normalizeInstrumentPartSelection(selected.instrument, selected.part).instrument || '-'],
+                ['파트', normalizeInstrumentPartSelection(selected.instrument, selected.part).part || '-'],
                 ['역할', selected.role],
                 ['등급', selected.grade || '-'],
                 ['연락처', selected.phone || '-'],
@@ -302,15 +312,11 @@ function MemberForm({
 
   useEffect(() => {
     if (item) {
-      const normalized = normalizeMemberInstrumentPart({
-        instrument: item.instrument,
-        part: item.part,
-      });
-      const normalizedInstrument = normalizeInstrumentName(normalized.instrument);
+      const normalized = normalizeInstrumentPartSelection(item.instrument, item.part);
       setForm({
         name: item.name,
-        instrument: normalizedInstrument,
-        part: normalized.part ?? '',
+        instrument: normalized.instrument,
+        part: normalized.part,
         role: item.role,
         phone: item.phone ?? '',
         email: item.email ?? '',
@@ -336,11 +342,17 @@ function MemberForm({
       return;
     }
     try {
+      const normalized = normalizeInstrumentPartSelection(form.instrument, form.part);
+      const normalizedForm = {
+        ...form,
+        instrument: normalized.instrument,
+        part: normalized.part,
+      };
       if (item) {
-        await updateMember(item.id, form);
+        await updateMember(item.id, normalizedForm);
         showToast(`${form.name} 정보가 저장되었습니다.`);
       } else {
-        await createMember(form);
+        await createMember(normalizedForm);
         showToast(`${form.name} 단원이 추가되었습니다.`);
       }
       onSaved();
@@ -380,15 +392,14 @@ function MemberForm({
           <Combobox
             category="instrument"
             value={form.instrument}
-            onChange={(value) => setForm((f) => ({ ...f, instrument: value, part: '' }))}
+            onChange={(value) => setForm((f) => ({ ...f, ...normalizeInstrumentPartSelection(value, f.part) }))}
             defaultOptions={INSTRUMENT_OPTIONS}
           />
         </div>
         <div>
           <label className="label">파트</label>
           {(() => {
-            const instrumentBase = getInstrumentBase(form.instrument);
-            const partOptions = PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+            const partOptions = getPartOptionsForInstrument(form.instrument);
             const isDisabled = partOptions.length === 0;
             return (
               <Combobox

@@ -37,10 +37,11 @@ export default function Combobox({
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const defaultOptionsKey = defaultOptions.join('\u0000');
 
   useEffect(() => {
     loadItems();
-  }, [category]);
+  }, [category, defaultOptionsKey]);
 
   useEffect(() => {
     setInput(value);

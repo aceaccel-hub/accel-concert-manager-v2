@@ -1,3 +1,5 @@
+import { PART_OPTIONS_BY_INSTRUMENT } from '../constants/memberOptions';
+
 // 악기명 정규화 (화면 표시용)
 export function normalizeInstrumentName(instrument: string | undefined): string {
   if (!instrument) return '';
@@ -145,4 +147,24 @@ export function normalizeMemberInstrumentPart(member: { instrument?: string; par
   }
 
   return member;
+}
+
+export function getPartOptionsForInstrument(instrument: string | undefined): string[] {
+  const instrumentBase = getInstrumentBase(instrument);
+  return PART_OPTIONS_BY_INSTRUMENT[instrumentBase] || [];
+}
+
+export function normalizeInstrumentPartSelection(
+  instrument: string | undefined,
+  part: string | undefined = ''
+): { instrument: string; part: string } {
+  const normalized = normalizeMemberInstrumentPart({ instrument, part });
+  const instrumentName = getInstrumentBase(normalized.instrument) || normalizeInstrumentName(normalized.instrument) || '';
+  const partOptions = getPartOptionsForInstrument(instrumentName);
+  const currentPart = normalized.part || '';
+
+  return {
+    instrument: instrumentName,
+    part: partOptions.length === 0 || partOptions.includes(currentPart) ? currentPart : partOptions[0],
+  };
 }
