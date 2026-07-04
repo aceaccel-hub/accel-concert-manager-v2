@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Edit2, Star, PlusCircle } from 'lucide-react';
+import { Download, FileSpreadsheet, Plus, Search, Trash2, Edit2, Star, PlusCircle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import type { Member, MemberRole, MemberGrade, MemberStatus, Concert } from '../../types';
 import StatusBadge from '../common/StatusBadge';
 import Modal from '../common/Modal';
@@ -20,6 +21,12 @@ import {
   getPartOptionsForInstrument,
   normalizeInstrumentPartSelection,
 } from '../../utils/normalization';
+import {
+  getMemberImportIdentity,
+  parseMemberRowsFromSheets,
+  type ImportedMemberInput,
+  type ParsedMemberExcelRow,
+} from '../../utils/memberExcelImport';
 
 // 부분 필터 옵션 (모든 parts의 union)
 const PARTS = Array.from(
@@ -46,6 +53,7 @@ export default function MembersPage() {
   const [editItem, setEditItem] = useState<Member | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [addToConcertTarget, setAddToConcertTarget] = useState<Member | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   const load = async () => {
     setMembers(await getAllMembers());
@@ -84,15 +92,24 @@ export default function MembersPage() {
         <div className="p-4 border-b border-gray-200">
           <div className="flex justify-between items-center mb-3">
             <h2 className="font-semibold text-gray-900">전체 단원 DB</h2>
-            <button
-              className="btn-primary text-xs py-1.5 px-3"
-              onClick={() => {
-                setEditItem(null);
-                setShowForm(true);
-              }}
-            >
-              <Plus size={14} /> 추가
-            </button>
+            <div className="flex gap-1.5">
+              <button
+                className="btn-secondary text-xs py-1.5 px-2.5"
+                onClick={() => setShowImport(true)}
+                title="Excel 파일에서 단원 가져오기"
+              >
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              <button
+                className="btn-primary text-xs py-1.5 px-3"
+                onClick={() => {
+                  setEditItem(null);
+                  setShowForm(true);
+                }}
+              >
+                <Plus size={14} /> 추가
+              </button>
+            </div>
           </div>
           <div className="relative mb-2">
             <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
@@ -274,7 +291,416 @@ export default function MembersPage() {
           }}
         />
       )}
+
+      {showImport && (
+        <MemberExcelImportModal
+          existingMembers={members}
+          onClose={() => setShowImport(false)}
+          onImported={() => {
+            setShowImport(false);
+            load();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+type ImportPreviewRow = ParsedMemberExcelRow & {
+  existing?: Member;
+  action: 'create' | 'update';
+};
+
+const compactImportedMember = (data: ImportedMemberInput): ImportedMemberInput => {
+  const cleaned = Object.entries(data).reduce<Record<string, unknown>>((acc, [key, value]) => {
+    if (value !== undefined && value !== '') acc[key] = value;
+    return acc;
+  }, {});
+  return cleaned as ImportedMemberInput;
+};
+
+function MemberExcelImportModal({
+  existingMembers,
+  onClose,
+  onImported,
+}: {
+  existingMembers: Member[];
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const [fileName, setFileName] = useState('');
+  const [rows, setRows] = useState<ImportPreviewRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const existingByIdentity = new Map(existingMembers.map((member) => [getMemberImportIdentity(member), member]));
+
+  const buildPreviewRows = (parsedRows: ParsedMemberExcelRow[]): ImportPreviewRow[] => {
+    const seen = new Set<string>();
+    return parsedRows.map((row) => {
+      const identity = getMemberImportIdentity(row.data);
+      const duplicateInFile = seen.has(identity);
+      seen.add(identity);
+      const existing = existingByIdentity.get(identity);
+      return {
+        ...row,
+        warnings: duplicateInFile ? [...row.warnings, '파일 내 중복 가능'] : row.warnings,
+        existing,
+        action: existing ? 'update' : 'create',
+      };
+    });
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+      const templateRows = [
+        [
+          '이름',
+          '악기',
+          '파트',
+          '역할',
+          '연락처',
+          '이메일',
+          '신분증유형',
+          '주민등록번호',
+          '국적',
+          '소득구분',
+          '사례비',
+          '은행',
+          '계좌번호',
+          '예금주',
+          '예금주관계',
+          '등급',
+          '실력등급',
+          '상태',
+          '가입일',
+          '비고',
+        ],
+        [
+          '김도균',
+          'Violin',
+          'Violin I',
+          '일반단원',
+          '010-0000-0000',
+          'example@accel.kr',
+          '주민등록번호',
+          '900101-1234567',
+          '한국',
+          '사업소득',
+          300000,
+          '국민은행',
+          '123-456-789012',
+          '김도균',
+          '본인',
+          '정단원',
+          'A',
+          '활동중',
+          '2026-07-03',
+          '예시 행은 삭제 후 사용하세요',
+        ],
+        [
+          '유은영',
+          'Viola',
+          'Viola',
+          '수석',
+          '',
+          '',
+          '',
+          '',
+          '한국',
+          '사업소득',
+          250000,
+          '',
+          '',
+          '',
+          '',
+          '정단원',
+          'B',
+          '활동중',
+          '',
+          '',
+        ],
+      ];
+      const guideRows = [
+        ['항목', '작성 방법'],
+        ['이름', '필수입니다. 이름이 없는 행은 가져오지 않습니다.'],
+        ['악기', 'Violin, Viola, V.Cello, Flute 등 단원 관리에서 쓰는 악기명을 권장합니다.'],
+        ['파트', 'Violin I, Violin II, Viola 등 세부 파트를 적습니다.'],
+        ['역할', '일반단원, 악장, 수석, 부수석, 객원, 지휘자, 협연자 등을 권장합니다.'],
+        ['연락처', '기존 DB와 이름+연락처가 같으면 업데이트 대상으로 인식합니다.'],
+        ['신분증유형', '주민등록번호, 외국인등록번호, 여권번호 중 하나를 권장합니다.'],
+        ['주민등록번호', '값이 있으면 기존 DB 중복 판별의 최우선 기준으로 사용됩니다.'],
+        ['소득구분', '사업소득 또는 기타소득을 권장합니다.'],
+        ['사례비', '숫자 입력을 권장합니다. 예: 300000'],
+        ['등급', '정단원, 준단원, 객원 중 하나를 권장합니다.'],
+        ['실력등급', 'A, B, C 중 하나를 권장합니다.'],
+        ['상태', '활동중, 휴식중, 탈퇴 중 하나를 권장합니다.'],
+        ['가입일', 'YYYY-MM-DD 형식을 권장합니다.'],
+        ['중복 처리', '주민등록번호가 같으면 업데이트, 없으면 이름+연락처, 그것도 없으면 이름 기준으로 판별합니다.'],
+      ];
+      const templateSheet = XLSX.utils.aoa_to_sheet(templateRows);
+      const guideSheet = XLSX.utils.aoa_to_sheet(guideRows);
+
+      templateSheet['!cols'] = [
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 22 },
+        { wch: 16 },
+        { wch: 18 },
+        { wch: 10 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 18 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 10 },
+        { wch: 10 },
+        { wch: 10 },
+        { wch: 12 },
+        { wch: 34 },
+      ];
+      guideSheet['!cols'] = [{ wch: 16 }, { wch: 72 }];
+
+      XLSX.utils.book_append_sheet(workbook, templateSheet, '단원 양식');
+      XLSX.utils.book_append_sheet(workbook, guideSheet, '작성 안내');
+      XLSX.writeFile(workbook, '아첼_단원_가져오기_추천양식.xlsx', { compression: true });
+      showToast('단원 추천 양식을 다운로드했습니다.', 'info');
+    } catch (downloadError) {
+      setError(
+        `양식 다운로드 실패: ${
+          downloadError instanceof Error ? downloadError.message : '알 수 없는 오류'
+        }`
+      );
+    }
+  };
+
+  const handleFile = async (file: File) => {
+    setError(null);
+    setRows([]);
+    setFileName(file.name);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const sheets = workbook.SheetNames.map((sheetName) => ({
+        sheetName,
+        rows: XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+          header: 1,
+          defval: '',
+          raw: false,
+        }),
+      }));
+      const parsed = parseMemberRowsFromSheets(sheets);
+      if (parsed.length === 0) {
+        setError('가져올 단원을 찾지 못했습니다. 이름 또는 성명 열이 있는지 확인해 주세요.');
+        return;
+      }
+      setRows(buildPreviewRows(parsed));
+    } catch (err) {
+      console.error('Excel import failed:', err);
+      setError('엑셀 파일을 읽지 못했습니다. .xlsx, .xls, .csv 파일인지 확인해 주세요.');
+    } finally {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const file = event.dataTransfer.files?.[0];
+    if (file) await handleFile(file);
+  };
+
+  const removePreviewRow = (key: string) => {
+    setRows((prev) => prev.filter((row) => row.key !== key));
+  };
+
+  const clearPreviewRows = () => {
+    setRows([]);
+    setFileName('');
+    setError(null);
+  };
+
+  const handleImport = async () => {
+    if (rows.length === 0) return;
+    setSaving(true);
+    try {
+      let created = 0;
+      let updated = 0;
+
+      for (const row of rows) {
+        const data = compactImportedMember(row.data);
+        if (row.existing) {
+          await updateMember(row.existing.id, data);
+          updated += 1;
+        } else {
+          await createMember(data);
+          created += 1;
+        }
+      }
+
+      showToast(`Excel 가져오기 완료: 신규 ${created}명, 업데이트 ${updated}명`);
+      onImported();
+    } catch (err) {
+      console.error('Excel import save failed:', err);
+      setError('단원 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createCount = rows.filter((row) => row.action === 'create').length;
+  const updateCount = rows.filter((row) => row.action === 'update').length;
+
+  return (
+    <Modal
+      title="Excel 단원 가져오기"
+      onClose={onClose}
+      size="xl"
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose} disabled={saving}>
+            취소
+          </button>
+          <button className="btn-primary" onClick={handleImport} disabled={saving || rows.length === 0}>
+            {saving ? '저장 중...' : '가져오기'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={handleDownloadTemplate}
+            title="가져오기 인식률이 가장 높은 추천 양식을 다운로드합니다"
+          >
+            <Download size={14} /> 추천 양식 다운로드
+          </button>
+        </div>
+
+        <label
+          className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center cursor-pointer transition-colors ${
+            isDragging
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-300'
+          }`}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <FileSpreadsheet size={28} className="text-green-600" />
+          <span className="text-sm font-semibold text-gray-900">엑셀 파일 선택 또는 드래그</span>
+          <span className="text-xs text-gray-500">여러 시트와 다양한 헤더명을 자동으로 인식합니다.</span>
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv,.tsv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) handleFile(file);
+              event.currentTarget.value = '';
+            }}
+          />
+        </label>
+
+        {fileName && (
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+            선택 파일: <span className="font-semibold">{fileName}</span>
+            {rows.length > 0 && (
+              <span className="ml-2">
+                신규 {createCount}명 · 업데이트 {updateCount}명
+              </span>
+            )}
+          </div>
+        )}
+
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+        {rows.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <button type="button" className="btn-secondary text-xs py-1" onClick={clearPreviewRows}>
+                전체 비우기
+              </button>
+            </div>
+            <div className="max-h-[420px] overflow-auto rounded-xl border border-gray-200">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">상태</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">이름</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">악기/파트</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">역할</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">연락처</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">사례비</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">출처</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">확인</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">제외</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {rows.map((row) => (
+                  <tr key={row.key} className="hover:bg-gray-50">
+                    <td className="px-3 py-2">
+                      <span className={`badge text-xs ${row.action === 'create' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {row.action === 'create' ? '신규' : '업데이트'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-medium text-gray-900">{row.data.name}</td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {row.data.instrument || '-'} / {row.data.part || '-'}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{row.data.role}</td>
+                    <td className="px-3 py-2 text-gray-600">{row.data.phone || '-'}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">
+                      {row.data.baseFee ? `${row.data.baseFee.toLocaleString()}원` : '-'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {row.sheetName} {row.rowNumber}행
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {row.warnings.length > 0 ? row.warnings.join(', ') : `${row.matchedFields.length}개 항목 인식`}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        onClick={() => removePreviewRow(row.key)}
+                        title="이 행 제외"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

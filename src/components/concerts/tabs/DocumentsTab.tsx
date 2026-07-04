@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { FileText, Clipboard, Eye, Plus, Trash2, FileSpreadsheet, FileDown, X, ChevronDown, Edit2 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
-import type { ConcertDocument, DocumentType, Member, Concert } from '../../../types';
-import { calcWithholding, maskResidentNumber } from '../../../utils/calculations';
+import type { Budget, ConcertDocument, DocumentType, Member, Concert, ConcertMember } from '../../../types';
+import { calcWithholding, maskResidentNumber, parseFormattedNumber } from '../../../utils/calculations';
+import { normalizeInstrumentName, normalizeInstrumentPartSelection } from '../../../utils/normalization';
 import {
   getDocuments,
   createDocument,
@@ -49,6 +50,223 @@ const DOC_TYPES: { type: DocumentType; icon: string; desc: string }[] = [
   { type: '견적서', icon: '🧾', desc: '견적 주문서' },
   { type: '원천징수영수증', icon: '🏛️', desc: '국세청 신고용 원천징수영수증' },
 ];
+
+type ConcertMemberFull = ConcertMember & { member: Member };
+type EstimateItem = { name: string; qty: number; unitPrice: number };
+type SettlementRow = {
+  type: '수입' | '지출';
+  title: string;
+  category: string;
+  plannedAmount: number;
+  displayAmount: number;
+  status: string;
+};
+
+const ESTIMATE_PART_ORDER = [
+  '지휘',
+  '협연자',
+  '편곡',
+  'Violin I',
+  'Violin II',
+  'Viola',
+  'V.Cello',
+  'C.Bass',
+  'Flute',
+  'Piccolo',
+  'Oboe',
+  'English Horn',
+  'Clarinet',
+  'Bass Clarinet',
+  'Bassoon',
+  'Contrabassoon',
+  'Horn',
+  'Trumpet',
+  'Trombone',
+  'Tuba',
+  'Timpani',
+  'Percussion',
+  'Bass Drum',
+  'Cymbals',
+  'Side Drum',
+  'Triangle',
+  'Tambourine',
+  'Gong',
+  'Piano',
+  'Harp',
+  'Organ',
+  'Celesta',
+];
+
+const ESTIMATE_PART_SORT_ORDER = ESTIMATE_PART_ORDER.reduce<Record<string, number>>((acc, part, index) => {
+  acc[part] = index;
+  return acc;
+}, {});
+
+const ESTIMATE_ROLE_SORT_ORDER: Record<string, number> = {
+  지휘자: -2,
+  악장: -1,
+  수석: 0,
+  부수석: 1,
+  일반단원: 2,
+  객원: 3,
+  협연자: 4,
+  편곡자: 5,
+  미배치: 99,
+};
+
+const ESTIMATE_BROAD_POSITION_GROUPS = new Set(['Woodwind', 'Brass', 'Percussion', 'Keyboard / Etc']);
+
+const stripEstimatePositionNumber = (label: string) => label.replace(/\s+\d+$/, '').trim();
+
+const normalizeEstimatePartName = (value?: string, seatLabel = ''): string => {
+  const raw = String(value || '').trim();
+  if (ESTIMATE_BROAD_POSITION_GROUPS.has(raw) && seatLabel) {
+    return normalizeEstimatePartName(stripEstimatePositionNumber(seatLabel));
+  }
+
+  const normalized = normalizeInstrumentName(raw) || raw;
+  const aliases: Record<string, string> = {
+    Conductor: '지휘',
+    Soloist: '협연자',
+    협연: '협연자',
+    Arranger: '편곡',
+    '1st Violin': 'Violin I',
+    'Violin 1': 'Violin I',
+    '2nd Violin': 'Violin II',
+    'Violin 2': 'Violin II',
+    Cello: 'V.Cello',
+    Bass: 'C.Bass',
+    'Double Bass': 'C.Bass',
+    'Keyboard / Etc': 'Piano',
+  };
+  return aliases[normalized] || normalized;
+};
+
+const getEstimatePartSortIndex = (part: string): number =>
+  ESTIMATE_PART_SORT_ORDER[normalizeEstimatePartName(part)] ?? 999;
+
+const getEstimateMemberPart = (cm: ConcertMemberFull): string => {
+  const fallback = normalizeInstrumentPartSelection(
+    cm.instrument || cm.member?.instrument,
+    cm.part || cm.member?.part
+  );
+  const assignedPart = normalizeEstimatePartName(cm.assignedPart || cm.assignedInstrument, cm.assignedSeat || '');
+  const fallbackPart = normalizeEstimatePartName(fallback.part || fallback.instrument);
+  return cm.isAssigned ? assignedPart || fallbackPart : fallbackPart;
+};
+
+const getEstimateSeatSortIndex = (cm: ConcertMemberFull): number => {
+  const seat = cm.assignedSeat || cm.position || '';
+  const roleOrder = ESTIMATE_ROLE_SORT_ORDER[seat];
+  if (roleOrder != null) return roleOrder;
+
+  const deskMatch = seat.match(/^(\d+)\s*(in|out)?$/i);
+  if (deskMatch) {
+    const desk = Number(deskMatch[1]);
+    const side = deskMatch[2]?.toLowerCase();
+    return desk * 10 + (side === 'out' ? 1 : 0);
+  }
+
+  const numberedSeat = seat.match(/(\d+)$/);
+  if (numberedSeat) return Number(numberedSeat[1]) * 10;
+
+  return 999;
+};
+
+const getEstimateMemberRole = (cm: ConcertMemberFull): string =>
+  cm.assignedRole || cm.role || cm.member?.role || '';
+
+const getConcertMemberPaymentAmount = (cm: ConcertMemberFull): number => {
+  const hasConcertFee =
+    cm.fee !== undefined &&
+    cm.fee !== null &&
+    String(cm.fee).trim() !== '';
+  const baseFee = hasConcertFee ? toMoneyNumber(cm.fee) : toMoneyNumber(cm.member?.baseFee);
+  const extra = toMoneyNumber(cm.feeExtra);
+  const deduction = toMoneyNumber(cm.feeDeduction);
+  return Math.max(0, baseFee + extra - deduction);
+};
+
+const sortEstimateMembers = (members: ConcertMemberFull[]): ConcertMemberFull[] =>
+  [...members].sort((a, b) => {
+    const partDiff = getEstimatePartSortIndex(getEstimateMemberPart(a)) - getEstimatePartSortIndex(getEstimateMemberPart(b));
+    if (partDiff !== 0) return partDiff;
+
+    const seatDiff = getEstimateSeatSortIndex(a) - getEstimateSeatSortIndex(b);
+    if (seatDiff !== 0) return seatDiff;
+
+    const roleDiff =
+      (ESTIMATE_ROLE_SORT_ORDER[getEstimateMemberRole(a)] ?? 50) -
+      (ESTIMATE_ROLE_SORT_ORDER[getEstimateMemberRole(b)] ?? 50);
+    if (roleDiff !== 0) return roleDiff;
+
+    const partNameDiff = getEstimateMemberPart(a).localeCompare(getEstimateMemberPart(b), 'ko', { numeric: true });
+    if (partNameDiff !== 0) return partNameDiff;
+
+    return (a.member?.name ?? '').localeCompare(b.member?.name ?? '', 'ko');
+  });
+
+const toMoneyNumber = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') return parseFormattedNumber(value);
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const getEstimateItems = (cms: ConcertMemberFull[]): EstimateItem[] =>
+  sortEstimateMembers(cms.filter((cm) => !cm.isReserve)).map((cm) => {
+    return {
+      name: `${cm.member?.name || '?'} 사례비`,
+      qty: 1,
+      unitPrice: getConcertMemberPaymentAmount(cm),
+    };
+  });
+
+const getEstimateSupply = (items: EstimateItem[]): number =>
+  items.reduce((sum, item) => sum + toMoneyNumber(item.qty) * toMoneyNumber(item.unitPrice), 0);
+
+const getSettlementIncomeRows = (budgets: Budget[]): SettlementRow[] =>
+  budgets
+    .filter((b) => b.type === '수입')
+    .map((b) => ({
+      type: '수입',
+      title: b.title,
+      category: b.category,
+      plannedAmount: toMoneyNumber(b.plannedAmount),
+      displayAmount: toMoneyNumber(b.paidAmount),
+      status: b.paymentStatus,
+    }));
+
+const getSettlementExpenseRows = (cms: ConcertMemberFull[], budgets: Budget[]): SettlementRow[] => {
+  const memberRows = sortEstimateMembers(cms.filter((cm) => !cm.isReserve)).map((cm) => {
+    const amount = getConcertMemberPaymentAmount(cm);
+    return {
+      type: '지출' as const,
+      title: `${cm.member?.name || '?'} 사례비`,
+      category: '단원사례비',
+      plannedAmount: amount,
+      displayAmount: amount,
+      status: cm.feePaid ? '지급완료' : '예정',
+    };
+  });
+
+  const otherExpenseRows = budgets
+    .filter((b) => b.type === '지출' && b.category !== '단원페이' && b.category !== '단원사례비')
+    .map((b) => {
+      const paidAmount = toMoneyNumber(b.paidAmount);
+      const plannedAmount = toMoneyNumber(b.plannedAmount);
+      return {
+        type: '지출' as const,
+        title: b.title,
+        category: b.category,
+        plannedAmount,
+        displayAmount: paidAmount > 0 ? paidAmount : plannedAmount,
+        status: b.paymentStatus,
+      };
+    });
+
+  return [...memberRows, ...otherExpenseRows];
+};
 
 export default function DocumentsTab() {
   const { concert } = useOutletContext<ConcertTabContext>();
@@ -247,20 +465,24 @@ ${concert.title}
     }
 
     if (type === '정산표') {
-      const income = budgets.filter((b) => b.type === '수입');
-      const expense = budgets.filter((b) => b.type === '지출');
+      const income = getSettlementIncomeRows(budgets);
+      const expense = getSettlementExpenseRows(cms, budgets);
       const totalIncome = income.reduce((s, b) => s + b.plannedAmount, 0);
-      const totalPaidIn = income.reduce((s, b) => s + b.paidAmount, 0);
-      const totalPaid = expense.reduce((s, b) => s + b.paidAmount, 0);
+      const totalPaidIn = income.reduce((s, b) => s + b.displayAmount, 0);
+      const totalPaid = expense.reduce((s, b) => s + b.displayAmount, 0);
       return (
         header +
         `【 정 산 표 】\n\n` +
         `▶ 수입\n` +
-        income.map((b) => `  · ${b.title}: ${b.paidAmount.toLocaleString()}원 (계획 ${b.plannedAmount.toLocaleString()}원, ${b.paymentStatus})`).join('\n') +
+        (income.length
+          ? income.map((b) => `  · ${b.title}: ${b.displayAmount.toLocaleString()}원 (계획 ${b.plannedAmount.toLocaleString()}원, ${b.status})`).join('\n')
+          : '  · 등록된 수입 항목이 없습니다.') +
         `\n  실집행 합계: ${totalPaidIn.toLocaleString()}원 / 계획 ${totalIncome.toLocaleString()}원\n\n` +
         `▶ 지출\n` +
-        expense.map((b) => `  · ${b.title}: ${b.paidAmount.toLocaleString()}원 (${b.paymentStatus})`).join('\n') +
-        `\n  실집행 합계: ${totalPaid.toLocaleString()}원\n\n` +
+        (expense.length
+          ? expense.map((b) => `  · ${b.title}: ${b.displayAmount.toLocaleString()}원 (${b.status})`).join('\n')
+          : '  · 등록된 지출 항목이 없습니다.') +
+        `\n  지출 합계: ${totalPaid.toLocaleString()}원\n\n` +
         `잔액: ${(totalPaidIn - totalPaid).toLocaleString()}원`
       );
     }
@@ -362,17 +584,17 @@ ${concert.title}
     }
 
     if (type === '견적서') {
-      const expense = budgets.filter((b) => b.type === '지출');
-      const supply = expense.reduce((s, b) => s + b.plannedAmount, 0);
+      const estimateItems = getEstimateItems(cms);
+      const supply = getEstimateSupply(estimateItems);
       const vat = Math.round(supply * 0.1);
       return (
         header +
         `【 견 적 서 】\n\n` +
         `문서번호: ${docNumber()}\n견적일: ${new Date().toISOString().slice(0, 10)}\n공연명: ${concert.title}\n\n` +
         `■ 견적 항목\n` +
-        (expense.length
-          ? expense.map((b, i) => `${i + 1}. ${b.title} / ${b.category} / ${b.plannedAmount.toLocaleString()}원`).join('\n')
-          : '등록된 지출 예산 항목이 없습니다.') +
+        (estimateItems.length
+          ? estimateItems.map((item, i) => `${i + 1}. ${item.name} / 단원사례비 / ${item.unitPrice.toLocaleString()}원`).join('\n')
+          : '등록된 출연 단원이 없습니다.') +
         `\n\n공급가액: ${supply.toLocaleString()}원\n부가세(10%): ${vat.toLocaleString()}원\n합계: ${(supply + vat).toLocaleString()}원`
       );
     }
@@ -460,26 +682,26 @@ ${concert.title}
       bodyHtml = makeTable(
         ['날짜', '시간', '장소', '유형', '대상곡', '진행도', '메모'],
         rehearsals.map((r) => [
-          r.date, r.time, r.place, r.type,
+          r.date, r.time || '', r.place, r.type,
           (r.targetPieces || []).join(', '),
           r.progressRate != null ? `${r.progressRate}%` : '',
           r.memo || '',
         ])
       );
     } else if (selectedType === '정산표') {
-      const income = budgets.filter((b) => b.type === '수입');
-      const expense = budgets.filter((b) => b.type === '지출');
-      const totalPaidIn = income.reduce((s, b) => s + b.paidAmount, 0);
-      const totalPaid = expense.reduce((s, b) => s + b.paidAmount, 0);
+      const income = getSettlementIncomeRows(budgets);
+      const expense = getSettlementExpenseRows(cms, budgets);
+      const totalPaidIn = income.reduce((s, b) => s + b.displayAmount, 0);
+      const totalPaid = expense.reduce((s, b) => s + b.displayAmount, 0);
       bodyHtml =
         makeTable(
-          ['구분', '항목', '카테고리', '계획액(원)', '집행액(원)', '상태'],
+          ['구분', '항목', '카테고리', '금액(원)', '상태'],
           [
-            ...income.map((b) => ['수입', b.title, b.category, b.plannedAmount.toLocaleString(), b.paidAmount.toLocaleString(), b.paymentStatus]),
-            ...expense.map((b) => ['지출', b.title, b.category, b.plannedAmount.toLocaleString(), b.paidAmount.toLocaleString(), b.paymentStatus]),
+            ...income.map((b) => ['수입', b.title, b.category, b.displayAmount.toLocaleString(), b.status]),
+            ...expense.map((b) => ['지출', b.title, b.category, b.displayAmount.toLocaleString(), b.status]),
           ]
         ) +
-        `<p class="summary">수입 집행 ${totalPaidIn.toLocaleString()}원 · 지출 집행 ${totalPaid.toLocaleString()}원 · 잔액 ${(totalPaidIn - totalPaid).toLocaleString()}원</p>`;
+        `<p class="summary">수입 ${totalPaidIn.toLocaleString()}원 · 지출 ${totalPaid.toLocaleString()}원 · 잔액 ${(totalPaidIn - totalPaid).toLocaleString()}원</p>`;
     } else if (selectedType === '체크리스트') {
       bodyHtml = makeTable(
         ['순서', '항목', '완료여부'],
@@ -543,8 +765,8 @@ ${concert.title}
         ) +
         makeSection('5. 비고', makeTextBlock(concert.note || '-'));
     } else if (selectedType === '견적서') {
-      const expense = budgets.filter((b) => b.type === '지출');
-      const supply = expense.reduce((s, b) => s + b.plannedAmount, 0);
+      const estimateItems = getEstimateItems(cms);
+      const supply = getEstimateSupply(estimateItems);
       const vat = Math.round(supply * 0.1);
       const total = supply + vat;
       bodyHtml =
@@ -558,17 +780,17 @@ ${concert.title}
         ) +
         makeSection(
           '견적 항목',
-          expense.length
+          estimateItems.length
             ? makeTable(
                 ['번호', '항목', '분류', '공급가액'],
-                expense.map((b, i) => [
+                estimateItems.map((item, i) => [
                   i + 1,
-                  b.title,
-                  b.category,
-                  `${b.plannedAmount.toLocaleString()}원`,
+                  item.name,
+                  '단원사례비',
+                  `${item.unitPrice.toLocaleString()}원`,
                 ])
               )
-            : '<p class="empty">등록된 지출 예산 항목이 없습니다.</p>'
+            : '<p class="empty">등록된 출연 단원이 없습니다.</p>'
         ) +
         `<div class="amount-box">
           <div><span>공급가액</span><strong>${supply.toLocaleString()}원</strong></div>
@@ -787,24 +1009,24 @@ ${concert.title}
         ['【 리허설 일정표 】'],
         ['날짜', '시간', '장소', '유형', '대상곡', '진행도(%)', '메모'],
         ...rehearsals.map((r) => [
-          r.date, r.time, r.place, r.type,
+          r.date, r.time || '', r.place, r.type,
           (r.targetPieces || []).join(', '),
           r.progressRate ?? '',
           r.memo || '',
         ]),
       ];
     } else if (selectedType === '정산표') {
-      const income = budgets.filter((b) => b.type === '수입');
-      const expense = budgets.filter((b) => b.type === '지출');
+      const income = getSettlementIncomeRows(budgets);
+      const expense = getSettlementExpenseRows(cms, budgets);
       dataRows = [
         ['【 정 산 표 】'],
-        ['구분', '항목', '카테고리', '계획액(원)', '집행액(원)', '상태'],
-        ...income.map((b) => ['수입', b.title, b.category, b.plannedAmount, b.paidAmount, b.paymentStatus]),
-        ...expense.map((b) => ['지출', b.title, b.category, b.plannedAmount, b.paidAmount, b.paymentStatus]),
+        ['구분', '항목', '카테고리', '금액(원)', '상태'],
+        ...income.map((b) => ['수입', b.title, b.category, b.displayAmount, b.status]),
+        ...expense.map((b) => ['지출', b.title, b.category, b.displayAmount, b.status]),
         [],
-        ['', '수입 합계', '', income.reduce((s, b) => s + b.plannedAmount, 0), income.reduce((s, b) => s + b.paidAmount, 0), ''],
-        ['', '지출 합계', '', expense.reduce((s, b) => s + b.plannedAmount, 0), expense.reduce((s, b) => s + b.paidAmount, 0), ''],
-        ['', '잔액', '', '', income.reduce((s, b) => s + b.paidAmount, 0) - expense.reduce((s, b) => s + b.paidAmount, 0), ''],
+        ['', '수입 합계', '', income.reduce((s, b) => s + b.displayAmount, 0), ''],
+        ['', '지출 합계', '', expense.reduce((s, b) => s + b.displayAmount, 0), ''],
+        ['', '잔액', '', income.reduce((s, b) => s + b.displayAmount, 0) - expense.reduce((s, b) => s + b.displayAmount, 0), ''],
       ];
     } else if (selectedType === '체크리스트') {
       dataRows = [
@@ -838,17 +1060,17 @@ ${concert.title}
         ]),
       ];
     } else if (selectedType === '견적서') {
-      const expense = budgets.filter((b) => b.type === '지출');
-      const supply = expense.reduce((s, b) => s + b.plannedAmount, 0);
+      const estimateItems = getEstimateItems(cms);
+      const supply = getEstimateSupply(estimateItems);
       const vat = Math.round(supply * 0.1);
       dataRows = [
         ['【 견 적 서 】'],
-        ['항목', '카테고리', '수량', '단가', '공급가액'],
-        ...expense.map((b) => [b.title, b.category, 1, b.plannedAmount, b.plannedAmount]),
+        ['항목', '카테고리', '사례비', '공급가액'],
+        ...estimateItems.map((item) => [item.name, '단원사례비', item.unitPrice, item.qty * item.unitPrice]),
         [],
-        ['', '', '', '공급가액', supply],
-        ['', '', '', '부가세(10%)', vat],
-        ['', '', '', '합계', supply + vat],
+        ['', '', '공급가액', supply],
+        ['', '', '부가세(10%)', vat],
+        ['', '', '합계', supply + vat],
       ];
     } else if (selectedType === '원천징수영수증') {
       const entries = getReceiptEntries(cms);
@@ -1004,7 +1226,7 @@ ${concert.title}
           ...rehearsals.map((r) =>
             new TableRow({
               children: [
-                r.date, r.time, r.place, r.type,
+                r.date, r.time || '', r.place, r.type,
                 (r.targetPieces || []).join(', '),
                 r.progressRate != null ? `${r.progressRate}%` : '',
               ].map((c) => makeCell(c)),
@@ -1014,25 +1236,25 @@ ${concert.title}
       });
       contentSection = [table];
     } else if (selectedType === '정산표') {
-      const income = budgets.filter((b) => b.type === '수입');
-      const expense = budgets.filter((b) => b.type === '지출');
+      const income = getSettlementIncomeRows(budgets);
+      const expense = getSettlementExpenseRows(cms, budgets);
       const table = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         rows: [
           new TableRow({
-            children: ['구분', '항목', '카테고리', '계획액', '집행액', '상태'].map(
+            children: ['구분', '항목', '카테고리', '금액', '상태'].map(
               (h) => makeCell(h, true, 'E8EEF8')
             ),
             tableHeader: true,
           }),
           ...income.map((b) =>
             new TableRow({
-              children: ['수입', b.title, b.category, `${b.plannedAmount.toLocaleString()}원`, `${b.paidAmount.toLocaleString()}원`, b.paymentStatus].map((c) => makeCell(c)),
+              children: ['수입', b.title, b.category, `${b.displayAmount.toLocaleString()}원`, b.status].map((c) => makeCell(c)),
             })
           ),
           ...expense.map((b) =>
             new TableRow({
-              children: ['지출', b.title, b.category, `${b.plannedAmount.toLocaleString()}원`, `${b.paidAmount.toLocaleString()}원`, b.paymentStatus].map((c) => makeCell(c)),
+              children: ['지출', b.title, b.category, `${b.displayAmount.toLocaleString()}원`, b.status].map((c) => makeCell(c)),
             })
           ),
         ],
@@ -1087,18 +1309,18 @@ ${concert.title}
         }),
       ];
     } else if (selectedType === '견적서') {
-      const expense = budgets.filter((b) => b.type === '지출');
-      const supply = expense.reduce((s, b) => s + b.plannedAmount, 0);
+      const estimateItems = getEstimateItems(cms);
+      const supply = getEstimateSupply(estimateItems);
       const vat = Math.round(supply * 0.1);
       contentSection = [
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [
-            new TableRow({ children: ['항목', '카테고리', '수량', '단가', '공급가액'].map((h) => makeCell(h, true, 'E8EEF8')), tableHeader: true }),
-            ...expense.map((b) => new TableRow({ children: [b.title, b.category, '1', `${b.plannedAmount.toLocaleString()}원`, `${b.plannedAmount.toLocaleString()}원`].map((c) => makeCell(c)) })),
-            new TableRow({ children: ['', '', '', '공급가액', `${supply.toLocaleString()}원`].map((c, i) => makeCell(c, i >= 3, i >= 3 ? 'F8FAFD' : undefined)) }),
-            new TableRow({ children: ['', '', '', '부가세(10%)', `${vat.toLocaleString()}원`].map((c, i) => makeCell(c, i >= 3, i >= 3 ? 'F8FAFD' : undefined)) }),
-            new TableRow({ children: ['', '', '', '합계', `${(supply + vat).toLocaleString()}원`].map((c, i) => makeCell(c, i >= 3, i >= 3 ? 'E8EEF8' : undefined)) }),
+            new TableRow({ children: ['항목', '카테고리', '사례비', '공급가액'].map((h) => makeCell(h, true, 'E8EEF8')), tableHeader: true }),
+            ...estimateItems.map((item) => new TableRow({ children: [item.name, '단원사례비', `${item.unitPrice.toLocaleString()}원`, `${(item.qty * item.unitPrice).toLocaleString()}원`].map((c) => makeCell(c)) })),
+            new TableRow({ children: ['', '', '공급가액', `${supply.toLocaleString()}원`].map((c, i) => makeCell(c, i >= 2, i >= 2 ? 'F8FAFD' : undefined)) }),
+            new TableRow({ children: ['', '', '부가세(10%)', `${vat.toLocaleString()}원`].map((c, i) => makeCell(c, i >= 2, i >= 2 ? 'F8FAFD' : undefined)) }),
+            new TableRow({ children: ['', '', '합계', `${(supply + vat).toLocaleString()}원`].map((c, i) => makeCell(c, i >= 2, i >= 2 ? 'E8EEF8' : undefined)) }),
           ],
         }),
       ];
@@ -1837,23 +2059,20 @@ function ConcertPlanBuilder({ concert, concertId }: { concert: Concert; concertI
 
 // 견적서 빌더
 function EstimateBuilder({ concertId }: { concertId: string }) {
-  const [items, setItems] = useState<{ name: string; qty: number; unitPrice: number }[]>([]);
+  const [items, setItems] = useState<EstimateItem[]>([]);
   const [recipient, setRecipient] = useState('');
   const [sender, setSender] = useState('');
   const [vatEnabled, setVatEnabled] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const budgets = await getBudgets(concertId);
-      const expenseItems = budgets
-        .filter((b) => b.type === '지출')
-        .map((b) => ({ name: b.title, qty: 1, unitPrice: b.plannedAmount }));
-      setItems(expenseItems);
+      const concertMembers = await getConcertMembers(concertId);
+      setItems(getEstimateItems(concertMembers));
     };
     load();
   }, [concertId]);
 
-  const totalSupply = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const totalSupply = getEstimateSupply(items);
   const totalVat = vatEnabled ? Math.round(totalSupply * 0.1) : 0;
   const totalAmount = totalSupply + totalVat;
 
@@ -1861,9 +2080,12 @@ function EstimateBuilder({ concertId }: { concertId: string }) {
     setItems([...items, { name: '', qty: 1, unitPrice: 0 }]);
   };
 
-  const updateItem = (idx: number, field: string, value: any) => {
+  const updateItem = (idx: number, field: keyof EstimateItem, value: string) => {
     const newItems = [...items];
-    newItems[idx] = { ...newItems[idx], [field]: value };
+    newItems[idx] = {
+      ...newItems[idx],
+      [field]: field === 'name' ? value : toMoneyNumber(value),
+    };
     setItems(newItems);
   };
 
@@ -1908,15 +2130,14 @@ function EstimateBuilder({ concertId }: { concertId: string }) {
           <thead>
             <tr className="bg-gray-100">
               <th className="px-2 py-1 text-left">항목명</th>
-              <th className="px-2 py-1 text-center w-12">수량</th>
-              <th className="px-2 py-1 text-center w-20">단가</th>
+              <th className="px-2 py-1 text-center w-24">사례비</th>
               <th className="px-2 py-1 text-right w-20">공급가액</th>
               <th className="px-2 py-1 text-center w-12"></th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              const supply = item.qty * item.unitPrice;
+              const supply = toMoneyNumber(item.qty) * toMoneyNumber(item.unitPrice);
               return (
                 <tr key={idx} className="border-t">
                   <td className="px-2 py-1">
@@ -1928,22 +2149,13 @@ function EstimateBuilder({ concertId }: { concertId: string }) {
                       placeholder="항목명"
                     />
                   </td>
-                  <td className="px-2 py-1 text-center">
-                    <input
-                      type="number"
-                      min={1}
-                      className="input w-full text-center py-0.5"
-                      value={item.qty}
-                      onChange={(e) => updateItem(idx, 'qty', +e.target.value)}
-                    />
-                  </td>
                   <td className="px-2 py-1 text-right">
                     <input
                       type="number"
                       min={0}
                       className="input w-full text-right py-0.5"
                       value={item.unitPrice}
-                      onChange={(e) => updateItem(idx, 'unitPrice', +e.target.value)}
+                      onChange={(e) => updateItem(idx, 'unitPrice', e.target.value)}
                     />
                   </td>
                   <td className="px-2 py-1 text-right">{supply.toLocaleString()}</td>

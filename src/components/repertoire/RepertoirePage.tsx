@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Edit2, Music, PlusCircle } from 'lucide-react';
+import { Download, FileSpreadsheet, Plus, Search, Trash2, Edit2, Music, PlusCircle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import type { Repertoire, Difficulty, ScoreStatus } from '../../types';
 import Modal from '../common/Modal';
 import Combobox from '../common/Combobox';
+import { showToast } from '../common/Toast';
 import {
   getAllRepertoire,
   createRepertoire,
@@ -14,6 +16,12 @@ import { addProgramItem } from '../../hooks/useProgram';
 import { getAllConcerts } from '../../hooks/useConcert';
 import { useStore } from '../../store/store';
 import type { Concert } from '../../types';
+import {
+  getRepertoireImportIdentity,
+  parseRepertoireRowsFromSheets,
+  type ImportedRepertoireInput,
+  type ParsedRepertoireExcelRow,
+} from '../../utils/repertoireExcelImport';
 
 export default function RepertoirePage() {
   const navigate = useNavigate();
@@ -27,6 +35,7 @@ export default function RepertoirePage() {
   const [editItem, setEditItem] = useState<Repertoire | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Repertoire | null>(null);
   const [addToConcertTarget, setAddToConcertTarget] = useState<Repertoire | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   const load = async () => {
     setItems(await getAllRepertoire());
@@ -57,15 +66,24 @@ export default function RepertoirePage() {
         <div className="p-4 border-b border-gray-200">
           <div className="flex justify-between items-center mb-3">
             <h2 className="font-semibold text-gray-900">전체 곡목 DB</h2>
-            <button
-              className="btn-primary text-xs py-1.5 px-3"
-              onClick={() => {
-                setEditItem(null);
-                setShowForm(true);
-              }}
-            >
-              <Plus size={14} /> 추가
-            </button>
+            <div className="flex gap-1.5">
+              <button
+                className="btn-secondary text-xs py-1.5 px-2.5"
+                onClick={() => setShowImport(true)}
+                title="Excel 파일에서 곡목 가져오기"
+              >
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              <button
+                className="btn-primary text-xs py-1.5 px-3"
+                onClick={() => {
+                  setEditItem(null);
+                  setShowForm(true);
+                }}
+              >
+                <Plus size={14} /> 추가
+              </button>
+            </div>
           </div>
           <div className="relative mb-2">
             <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
@@ -221,7 +239,340 @@ export default function RepertoirePage() {
           }}
         />
       )}
+
+      {showImport && (
+        <RepertoireExcelImportModal
+          existingRepertoire={items}
+          onClose={() => setShowImport(false)}
+          onImported={() => {
+            load();
+            setShowImport(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function RepertoireExcelImportModal({
+  existingRepertoire,
+  onClose,
+  onImported,
+}: {
+  existingRepertoire: Repertoire[];
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const [fileName, setFileName] = useState('');
+  const [rows, setRows] = useState<ParsedRepertoireExcelRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const existingByIdentity = new Map(
+    existingRepertoire.map((item) => [getRepertoireImportIdentity(item), item])
+  );
+
+  const previewRows = rows.map((row) => ({
+    row,
+    existing: existingByIdentity.get(getRepertoireImportIdentity(row.data)),
+  }));
+
+  const handleDownloadTemplate = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+      const templateRows = [
+        ['작곡가', '곡명', '편곡', '편성', '시간', '난이도', '비고'],
+        ['Mozart', 'Eine kleine Nachtmusik', '', 'String Orchestra', 12, '중급', '예시 행은 삭제 후 사용하세요'],
+        ['Beethoven', 'Symphony No.5 1st mov.', '', 'Orchestra', 7, '고급', ''],
+        ['작곡가 미상', 'Amazing Grace', '현악 편곡', 'String Quartet', 4, '초급', ''],
+      ];
+      const guideRows = [
+        ['항목', '작성 방법'],
+        ['작곡가', '비어 있으면 가져오기 때 "작곡가 미상"으로 처리됩니다.'],
+        ['곡명', '필수입니다. 곡명이 없는 행은 가져오지 않습니다.'],
+        ['편곡', '편곡자 또는 편곡 정보를 적습니다. 비워도 됩니다.'],
+        ['편성', 'Orchestra, String Quartet, Violin Solo 등 자유롭게 적습니다.'],
+        ['시간', '분 단위 숫자 또는 시:분:초 형식을 사용할 수 있습니다. 예: 7, 3.5, 0:04:30'],
+        ['난이도', '초급, 중급, 고급 중 하나를 권장합니다.'],
+        ['비고', '추가 메모를 적습니다. 비워도 됩니다.'],
+        ['중복 처리', '기존 DB에 같은 작곡가 + 곡명이 있으면 새로 만들지 않고 업데이트합니다.'],
+      ];
+      const templateSheet = XLSX.utils.aoa_to_sheet(templateRows);
+      const guideSheet = XLSX.utils.aoa_to_sheet(guideRows);
+
+      templateSheet['!cols'] = [
+        { wch: 18 },
+        { wch: 34 },
+        { wch: 18 },
+        { wch: 24 },
+        { wch: 10 },
+        { wch: 10 },
+        { wch: 34 },
+      ];
+      guideSheet['!cols'] = [{ wch: 16 }, { wch: 60 }];
+
+      XLSX.utils.book_append_sheet(workbook, templateSheet, '곡목 양식');
+      XLSX.utils.book_append_sheet(workbook, guideSheet, '작성 안내');
+      XLSX.writeFile(workbook, '아첼_곡목_가져오기_추천양식.xlsx', { compression: true });
+      showToast('곡목 추천 양식을 다운로드했습니다.', 'info');
+    } catch (downloadError) {
+      setError(
+        `양식 다운로드 실패: ${
+          downloadError instanceof Error ? downloadError.message : '알 수 없는 오류'
+        }`
+      );
+    }
+  };
+
+  const handleFile = async (file: File) => {
+    try {
+      setError(null);
+      setFileName(file.name);
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const sheets = workbook.SheetNames.map((sheetName) => ({
+        sheetName,
+        rows: XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+          header: 1,
+          defval: '',
+          raw: false,
+        }) as unknown[][],
+      }));
+      const parsed = parseRepertoireRowsFromSheets(sheets);
+      setRows(parsed);
+      if (parsed.length === 0) {
+        setError('가져올 곡목을 찾지 못했습니다. 곡명 열이 포함되어 있는지 확인해 주세요.');
+      }
+    } catch (parseError) {
+      setRows([]);
+      setError(
+        `파일을 읽지 못했습니다: ${
+          parseError instanceof Error ? parseError.message : '알 수 없는 오류'
+        }`
+      );
+    } finally {
+      setIsDragging(false);
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) await handleFile(file);
+    event.target.value = '';
+  };
+
+  const handleDrop = async (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const file = event.dataTransfer.files?.[0];
+    if (file) await handleFile(file);
+  };
+
+  const removePreviewRow = (key: string) => {
+    setRows((prev) => prev.filter((row) => row.key !== key));
+  };
+
+  const clearPreviewRows = () => {
+    setRows([]);
+    setFileName('');
+    setError(null);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const buildUpdateInput = (row: ParsedRepertoireExcelRow) => {
+    const update: Partial<ImportedRepertoireInput> = {};
+    (row.matchedFields as (keyof ImportedRepertoireInput)[]).forEach((field) => {
+      const value = row.data[field];
+      if (value !== undefined && value !== '') {
+        (update as Record<keyof ImportedRepertoireInput, unknown>)[field] = value;
+      }
+    });
+    return update;
+  };
+
+  const handleImport = async () => {
+    if (rows.length === 0) return;
+    setIsImporting(true);
+    try {
+      let created = 0;
+      let updated = 0;
+
+      for (const row of rows) {
+        const existing = existingByIdentity.get(getRepertoireImportIdentity(row.data));
+        if (existing) {
+          await updateRepertoire(existing.id, buildUpdateInput(row));
+          updated += 1;
+        } else {
+          await createRepertoire(row.data);
+          created += 1;
+        }
+      }
+
+      showToast(`Excel 가져오기 완료: 신규 ${created}곡, 업데이트 ${updated}곡`);
+      onImported();
+    } catch (importError) {
+      setError(
+        `가져오기 실패: ${
+          importError instanceof Error ? importError.message : '알 수 없는 오류'
+        }`
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const createCount = previewRows.filter(({ existing }) => !existing).length;
+  const updateCount = previewRows.length - createCount;
+
+  return (
+    <Modal
+      title="Excel에서 곡목 가져오기"
+      onClose={onClose}
+      size="xl"
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose} disabled={isImporting}>
+            취소
+          </button>
+          <button
+            className="btn-primary"
+            onClick={handleImport}
+            disabled={rows.length === 0 || isImporting}
+          >
+            {isImporting ? '가져오는 중...' : `${rows.length}곡 가져오기`}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={handleDownloadTemplate}
+            title="가져오기 인식률이 가장 높은 추천 양식을 다운로드합니다"
+          >
+            <Download size={14} /> 추천 양식 다운로드
+          </button>
+        </div>
+
+        <label
+          className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-8 cursor-pointer transition-colors ${
+            isDragging
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+          }`}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <FileSpreadsheet size={28} className="text-green-600" />
+          <div className="text-sm font-medium text-gray-800">
+            {fileName || 'Excel, CSV 파일을 선택하거나 여기로 끌어오세요'}
+          </div>
+          <div className="text-xs text-gray-500">
+            곡명은 필수이며 작곡가, 편곡, 편성, 시간, 난이도, 비고 열을 자동으로 인식합니다.
+          </div>
+          <input
+            type="file"
+            className="hidden"
+            accept=".xlsx,.xls,.csv,.tsv"
+            onChange={handleFileChange}
+          />
+        </label>
+
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">{error}</p>}
+
+        {rows.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium text-gray-800">
+                미리보기: 신규 {createCount}곡, 업데이트 {updateCount}곡
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">작곡가 + 곡명이 같으면 기존 곡목을 업데이트합니다.</span>
+                <button type="button" className="btn-secondary text-xs py-1" onClick={clearPreviewRows}>
+                  전체 비우기
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[420px] overflow-auto border border-gray-200 rounded-lg">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="text-left px-3 py-2 w-20">상태</th>
+                    <th className="text-left px-3 py-2">작곡가</th>
+                    <th className="text-left px-3 py-2">곡명</th>
+                    <th className="text-left px-3 py-2">편성</th>
+                    <th className="text-left px-3 py-2 w-20">시간</th>
+                    <th className="text-left px-3 py-2 w-20">난이도</th>
+                    <th className="text-left px-3 py-2">출처</th>
+                    <th className="text-right px-3 py-2 w-16">제외</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map(({ row, existing }) => (
+                    <tr key={row.key} className="border-t border-gray-100">
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 font-medium ${
+                            existing
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'bg-green-50 text-green-700'
+                          }`}
+                        >
+                          {existing ? '업데이트' : '신규'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-800">{row.data.composer}</td>
+                      <td className="px-3 py-2 font-medium text-gray-900">{row.data.title}</td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {row.data.instrumentation || row.data.arrangement || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {row.data.duration ? `${row.data.duration}분` : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{row.data.difficulty || '-'}</td>
+                      <td className="px-3 py-2 text-gray-500">
+                        {row.sheetName} {row.rowNumber}행
+                        {row.warnings.length > 0 && (
+                          <span className="ml-1 text-orange-600">
+                            · {row.warnings.join(', ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          onClick={() => removePreviewRow(row.key)}
+                          title="이 행 제외"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

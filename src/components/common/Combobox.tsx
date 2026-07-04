@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, X, Check, Trash2 } from 'lucide-react';
+import { ChevronDown, X, Trash2 } from 'lucide-react';
 import type { MasterItemCategory } from '../../types';
 import { db } from '../../db/database';
 
@@ -211,37 +211,35 @@ export default function Combobox({
             filtered.map((item, idx) => (
               <div
                 key={idx}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(item);
+                }}
+                onMouseEnter={() => setHighlightedIndex(idx)}
+                onMouseLeave={() => setHighlightedIndex(-1)}
                 className={`flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-b-0 group transition-colors ${
                   highlightedIndex === idx
                     ? 'bg-blue-50'
                     : 'hover:bg-gray-50'
-                }`}
+                } cursor-pointer`}
               >
-                <button
-                  onClick={() => handleSelect(item)}
-                  onMouseEnter={() => setHighlightedIndex(idx)}
-                  onMouseLeave={() => setHighlightedIndex(-1)}
+                <span
                   className={`flex-1 text-left text-sm ${
                     highlightedIndex === idx ? 'font-medium text-gray-900' : 'text-gray-700'
                   }`}
-                  type="button"
                 >
                   {item}
-                </button>
+                </span>
                 {savedItems.has(item) && (
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded">
-                      <Check size={12} /> 저장됨
-                    </span>
-                    <button
-                      onClick={(e) => handleDelete(e, item)}
-                      className="p-1 hover:bg-red-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      type="button"
-                      title="삭제"
-                    >
-                      <Trash2 size={14} className="text-red-600" />
-                    </button>
-                  </div>
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => handleDelete(e, item)}
+                    className="p-1 hover:bg-red-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    type="button"
+                    title="삭제"
+                  >
+                    <Trash2 size={14} className="text-red-600" />
+                  </button>
                 )}
               </div>
             ))

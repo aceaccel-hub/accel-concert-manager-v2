@@ -513,13 +513,14 @@ function EditModal({
 
   const handleSave = async () => {
     const normalized = normalizeInstrumentPartSelection(form.instrument, form.part);
+    const fee = parseFormattedNumber(form.fee);
 
     // 연주회 멤버 정보 업데이트
     await db.concertMembers.update(cm.id, {
       instrument: normalized.instrument,
       part: normalized.part,
       role: form.role,
-      fee: parseFormattedNumber(form.fee),
+      fee,
       attendanceRate: form.attendanceRate,
       phone: form.phone,
       residentNumber: form.residentNumber,
@@ -542,7 +543,7 @@ function EditModal({
         bankAccount: form.bankAccount,
         accountHolder: form.accountHolder,
         accountHolderRelation: form.accountHolderRelation,
-        baseFee: parseFormattedNumber(form.fee),
+        baseFee: fee,
         grade: form.grade,
         status: form.status,
         note: form.note,
@@ -560,15 +561,15 @@ function EditModal({
           .toArray();
 
         if (budgets.length > 0) {
-          await db.budgets.update(budgets[0].id, { plannedAmount: form.fee });
-        } else if (form.fee > 0) {
+          await db.budgets.update(budgets[0].id, { plannedAmount: fee });
+        } else if (fee > 0) {
           await db.budgets.add({
             id: crypto.randomUUID(),
             concertId: cm.concertId,
             type: '지출',
             category: '단원페이',
             title: budgetTitle,
-            plannedAmount: form.fee,
+            plannedAmount: fee,
             paidAmount: 0,
             paymentStatus: '예정',
             createdAt: new Date().toISOString(),
