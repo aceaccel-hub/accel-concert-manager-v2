@@ -23,6 +23,19 @@ import BudgetPage from './components/budget/BudgetPage';
 import DocumentsPage from './components/documents/DocumentsPage';
 import SettingsPage from './components/settings/SettingsPage';
 
+const CANONICAL_HOST = 'accel-concert-manager-v2.vercel.app';
+const currentHost = window.location.hostname;
+const shouldRedirectToCanonical =
+  currentHost !== CANONICAL_HOST &&
+  currentHost.endsWith('.vercel.app') &&
+  currentHost.startsWith('accel-concert-manager-v2-');
+
+if (shouldRedirectToCanonical) {
+  window.location.replace(
+    `https://${CANONICAL_HOST}${window.location.pathname}${window.location.search}${window.location.hash}`
+  );
+}
+
 const router = createHashRouter([
   {
     path: '/',
@@ -57,8 +70,10 @@ const router = createHashRouter([
   },
 ]);
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>
-);
+if (!shouldRedirectToCanonical) {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>
+  );
+}

@@ -363,6 +363,7 @@ function RehearsalForm({
 }) {
   const [form, setForm] = useState({
     date: '',
+    selectedDates: [] as string[],
     startTime: '',
     endTime: '',
     place: '',
@@ -388,6 +389,7 @@ function RehearsalForm({
     if (item) {
       setForm({
         date: item.date,
+        selectedDates: [item.date],
         startTime: item.startTime || item.time || '',
         endTime: item.endTime || '',
         place: item.place,
@@ -402,13 +404,47 @@ function RehearsalForm({
     }
   }, [item]);
 
+  const handleDateChange = (date: string) => {
+    setForm((f) => {
+      const selectedDates =
+        item || !date || f.selectedDates.includes(date)
+          ? f.selectedDates
+          : [...f.selectedDates, date].sort();
+
+      return {
+        ...f,
+        date,
+        selectedDates: item ? [date] : selectedDates,
+      };
+    });
+  };
+
+  const removeSelectedDate = (date: string) => {
+    setForm((f) => {
+      const selectedDates = f.selectedDates.filter((d) => d !== date);
+
+      return {
+        ...f,
+        selectedDates,
+        date: f.date === date ? selectedDates[0] ?? '' : f.date,
+      };
+    });
+  };
+
+  const clearSelectedDates = () => {
+    setForm((f) => ({ ...f, date: '', selectedDates: [] }));
+  };
+
   const handleSave = async () => {
-    if (!form.date || !form.place) {
+    const datesToCreate = item
+      ? [form.date]
+      : Array.from(new Set([...(form.date ? [form.date] : []), ...form.selectedDates])).sort();
+
+    if (datesToCreate.length === 0 || !form.place) {
       alert('날짜와 장소를 입력해 주세요.');
       return;
     }
-    const payload = {
-      date: form.date,
+    const payloadBase = {
       startTime: form.startTime,
       endTime: form.endTime,
       time: form.startTime,
@@ -422,9 +458,11 @@ function RehearsalForm({
       nextTask: form.nextTask,
     };
     if (item) {
-      await updateRehearsal(item.id, payload);
+      await updateRehearsal(item.id, { ...payloadBase, date: form.date });
     } else {
-      await createRehearsal(concertId, payload);
+      for (const date of datesToCreate) {
+        await createRehearsal(concertId, { ...payloadBase, date });
+      }
     }
     onSaved();
   };
@@ -440,7 +478,7 @@ function RehearsalForm({
             취소
           </button>
           <button className="btn-primary" onClick={handleSave}>
-            저장
+            {item ? '저장' : form.selectedDates.length > 1 ? `${form.selectedDates.length}개 저장` : '저장'}
           </button>
         </>
       }
@@ -452,8 +490,41 @@ function RehearsalForm({
             type="date"
             className="input"
             value={form.date}
-            onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+            onChange={(e) => handleDateChange(e.target.value)}
           />
+          {!item && form.selectedDates.length > 0 && (
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-500">
+                  선택된 날짜 {form.selectedDates.length}개
+                </p>
+                <button
+                  type="button"
+                  onClick={clearSelectedDates}
+                  className="text-xs text-gray-400 hover:text-red-600"
+                >
+                  전체 삭제
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {form.selectedDates.map((date) => (
+                  <span
+                    key={date}
+                    className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700"
+                  >
+                    {date}
+                    <button
+                      type="button"
+                      onClick={() => removeSelectedDate(date)}
+                      className="text-blue-400 hover:text-red-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div />
         <div>
