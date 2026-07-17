@@ -158,12 +158,12 @@ export function startAutoCloudSync(): AutoSyncController {
           return;
         }
 
-        if (!meta) {
+        const dirty = hasDirtyLocalChanges(localFingerprint, meta);
+
+        if (!meta && !dirty) {
           await applyRemoteBundle(cloud.data, cloud.updatedAt ?? null);
           return;
         }
-
-        const dirty = hasDirtyLocalChanges(localFingerprint, meta);
 
         if (dirty) {
           const result = await pushCloudData(localBundle, settings);
