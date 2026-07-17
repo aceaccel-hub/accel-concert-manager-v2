@@ -17,6 +17,25 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '오류';
 }
 
+function countBundleRecords(bundle: BackupBundle): number {
+  return (
+    bundle.concerts.length +
+    bundle.repertoire.length +
+    bundle.programItems.length +
+    bundle.members.length +
+    bundle.concertMembers.length +
+    bundle.groups.length +
+    bundle.concertGroups.length +
+    bundle.rehearsals.length +
+    bundle.rehearsalAttendance.length +
+    bundle.budgets.length +
+    bundle.documents.length +
+    bundle.checklists.length +
+    bundle.memos.length +
+    (bundle.masterItems?.length ?? 0)
+  );
+}
+
 export default function SettingsPage() {
   const { settings, updateSettings, resetSettings } = useStore();
   const [form, setForm] = useState<Settings>({ ...settings });
@@ -104,9 +123,40 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveCloudSettings = () => {
-    saveCloudSyncSettings(cloudSettings);
-    flash('ok', '클라우드 DB 설정이 저장되었습니다.');
+  const handleSaveCloudSettings = async () => {
+    try {
+      setCloudBusy('test');
+      saveCloudSyncSettings(cloudSettings);
+
+      const [localBundle, cloud] = await Promise.all([
+        exportAllData(),
+        testCloudConnection(cloudSettings),
+      ]);
+      const localCount = countBundleRecords(localBundle);
+
+      if (cloud.exists && cloud.data && localCount === 0) {
+        await importAllData(cloud.data);
+        flash('ok', '클라우드와 연결했습니다. 데이터를 불러온 뒤 새로고침합니다.', 1500);
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
+
+      if (!cloud.exists && localCount > 0) {
+        const result = await pushCloudData(localBundle, cloudSettings);
+        flash(
+          'ok',
+          `클라우드와 연결하고 현재 데이터를 올렸습니다. ${result.updatedAt?.slice(0, 16) ?? ''}`,
+          3500
+        );
+        return;
+      }
+
+      flash('ok', '클라우드와 연결했습니다. 이제 변경사항이 자동 동기화됩니다.', 3500);
+    } catch (error: unknown) {
+      flash('err', '클라우드 연결 실패: ' + getErrorMessage(error), 4000);
+    } finally {
+      setCloudBusy(null);
+    }
   };
 
   const handleTestCloud = async () => {
@@ -276,8 +326,12 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <button className="btn-secondary justify-center" onClick={handleSaveCloudSettings}>
-              <Save size={14} /> 클라우드 설정 저장
+            <button
+              className="btn-secondary justify-center"
+              onClick={handleSaveCloudSettings}
+              disabled={cloudBusy !== null}
+            >
+              <Save size={14} /> {cloudBusy === 'test' ? '연결 중...' : '클라우드 연결'}
             </button>
             <button
               className="btn-secondary justify-center"
@@ -302,10 +356,10 @@ export default function SettingsPage() {
             </button>
           </div>
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
-            동기화 코드를 저장하면 앱이 켜져 있는 동안 약 8초 간격으로 자동 동기화합니다.
-            새 컴퓨터에서는 처음 한 번 클라우드에서 불러오기를 눌러 기준 데이터를 맞추면,
-            이후 변경사항은 자동으로 올라가고 내려옵니다. 동시에 같은 항목을 수정하면 마지막으로
-            저장된 변경이 기준이 됩니다.
+            동기화 코드를 한 번 연결하면 앱이 켜져 있는 동안 약 8초 간격으로 자동 동기화합니다.
+            새 기기가 비어 있으면 클라우드 데이터를 자동으로 불러오고, 클라우드가 비어 있으면
+            현재 기기의 데이터를 기준으로 올립니다. 동시에 같은 항목을 수정하면 마지막으로 저장된
+            변경이 기준이 됩니다.
           </div>
         </section>
 
@@ -321,7 +375,7 @@ export default function SettingsPage() {
             인터넷이 다시 연결되면 자동 동기화가 실행됩니다.
           </div>
           <ol className="list-decimal list-inside space-y-1.5 text-sm text-gray-600">
-            <li>인터넷이 되는 곳에서 웹사이트를 한 번 열고 로그인/동기화 코드를 저장합니다.</li>
+            <li>인터넷이 되는 곳에서 웹사이트를 한 번 열고 동기화 코드를 연결합니다.</li>
             <li>Safari 공유 버튼에서 홈 화면에 추가를 누릅니다.</li>
             <li>인터넷이 없는 곳에서는 홈 화면 아이콘으로 열어 입력합니다.</li>
             <li>인터넷이 다시 연결되면 앱을 열어둔 상태에서 변경 내역이 클라우드로 올라갑니다.</li>
