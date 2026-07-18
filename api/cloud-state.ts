@@ -12,6 +12,14 @@ interface BackupBundle {
 
 const STATE_PATH = process.env.CLOUD_STATE_PATH || 'accel-concert-manager/state.json';
 
+function getBlobToken(): string {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) {
+    throw new Error('BLOB_READ_WRITE_TOKEN 환경변수가 설정되지 않았습니다.');
+  }
+  return token;
+}
+
 function json(data: unknown, status = 200): Response {
   return Response.json(data, {
     status,
@@ -55,7 +63,11 @@ function isBackupBundle(value: unknown): value is BackupBundle {
 
 async function readCloudBundle(): Promise<BackupBundle | null> {
   try {
-    const result = await get(STATE_PATH, { access: 'private', useCache: false });
+    const result = await get(STATE_PATH, {
+      access: 'private',
+      useCache: false,
+      token: getBlobToken(),
+    });
     if (!result?.stream) return null;
     return (await new Response(result.stream).json()) as BackupBundle;
   } catch (error) {
@@ -100,6 +112,7 @@ export async function PUT(request: Request) {
     allowOverwrite: true,
     contentType: 'application/json; charset=utf-8',
     cacheControlMaxAge: 60,
+    token: getBlobToken(),
   });
 
   return json({
