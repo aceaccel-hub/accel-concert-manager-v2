@@ -1,4 +1,5 @@
-import { get, put } from '@vercel/blob';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore, initializeFirestore } from 'firebase-admin/firestore';
 
 interface BackupBundle {
   version: number;
@@ -10,14 +11,40 @@ interface BackupBundle {
   [key: string]: unknown;
 }
 
-const STATE_PATH = process.env.CLOUD_STATE_PATH || 'accel-concert-manager/state.json';
+interface CloudStateDocument {
+  bundle?: BackupBundle;
+  updatedAt?: string;
+}
 
-function getBlobToken(): string {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    throw new Error('BLOB_READ_WRITE_TOKEN 환경변수가 설정되지 않았습니다.');
+const FIREBASE_COLLECTION = process.env.FIREBASE_SYNC_COLLECTION || 'appState';
+const FIREBASE_DOCUMENT_ID = process.env.FIREBASE_SYNC_DOCUMENT_ID || 'accel-concert-manager';
+
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} 환경변수가 설정되지 않았습니다.`);
   }
-  return token;
+  return value;
+}
+
+function normalizePrivateKey(value: string): string {
+  return value.replace(/\\n/g, '\n');
+}
+
+function getDb() {
+  if (!getApps().length) {
+    const app = initializeApp({
+      credential: cert({
+        projectId: getRequiredEnv('FIREBASE_PROJECT_ID'),
+        clientEmail: getRequiredEnv('FIREBASE_CLIENT_EMAIL'),
+        privateKey: normalizePrivateKey(getRequiredEnv('FIREBASE_PRIVATE_KEY')),
+      }),
+    });
+
+    initializeFirestore(app, { ignoreUndefinedProperties: true });
+  }
+
+  return getFirestore();
 }
 
 function json(data: unknown, status = 200): Response {
@@ -62,35 +89,35 @@ function isBackupBundle(value: unknown): value is BackupBundle {
 }
 
 async function readCloudBundle(): Promise<BackupBundle | null> {
-  try {
-    const result = await get(STATE_PATH, {
-      access: 'private',
-      useCache: false,
-      token: getBlobToken(),
-    });
-    if (!result?.stream) return null;
-    return (await new Response(result.stream).json()) as BackupBundle;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('not found') || message.includes('404')) {
-      return null;
-    }
-    throw error;
-  }
+  const snapshot = await getDb().collection(FIREBASE_COLLECTION).doc(FIREBASE_DOCUMENT_ID).get();
+  if (!snapshot.exists) return null;
+
+  const data = snapshot.data() as CloudStateDocument | undefined;
+  if (!data?.bundle) return null;
+  return data.bundle;
+}
+
+function jsonError(error: unknown, fallbackMessage: string): Response {
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  return json({ error: message }, 500);
 }
 
 export async function GET(request: Request) {
   const unauthorized = assertAuthorized(request);
   if (unauthorized) return unauthorized;
 
-  const data = await readCloudBundle();
+  try {
+    const data = await readCloudBundle();
 
-  return json({
-    ok: true,
-    exists: Boolean(data),
-    data,
-    updatedAt: data?.exportedAt || null,
-  });
+    return json({
+      ok: true,
+      exists: Boolean(data),
+      data,
+      updatedAt: data?.exportedAt || null,
+    });
+  } catch (error) {
+    return jsonError(error, 'Firebase 클라우드 데이터를 불러오지 못했습니다.');
+  }
 }
 
 export async function PUT(request: Request) {
@@ -107,13 +134,15 @@ export async function PUT(request: Request) {
     exportedAt: new Date().toISOString(),
   };
 
-  await put(STATE_PATH, JSON.stringify(bundle), {
-    access: 'private',
-    allowOverwrite: true,
-    contentType: 'application/json; charset=utf-8',
-    cacheControlMaxAge: 60,
-    token: getBlobToken(),
-  });
+  try {
+    await getDb().collection(FIREBASE_COLLECTION).doc(FIREBASE_DOCUMENT_ID).set({
+      bundle,
+      updatedAt: bundle.exportedAt,
+      storage: 'firebase-firestore',
+    });
+  } catch (error) {
+    return jsonError(error, 'Firebase 클라우드 데이터를 저장하지 못했습니다.');
+  }
 
   return json({
     ok: true,
